@@ -13,3 +13,6 @@ Szymon Zyguła
 - Mixed paradigm
 - 'Ergonomiczność' (makra/algebraiczne typy)
 
+## Uwagi
+- if/else/match/loop mogą być zarówno stwierdzeniami jak i wyrażeniami  
+```let a = if something { value1 } else { value 2} ;```

@@ -1,4 +1,3 @@
-use std::fmt::Error;
 use std::io;
 use rand::Rng;
 use std::fs::File;
@@ -7,7 +6,6 @@ use std::io::Write;
 // nnd - debugger?
 const MAX_ITER: u32 = 100;
 const ARR_LEN: usize = 10;
-const MAX_N: usize = 10000;
 
 fn make_powers(x: u64) -> [u64; ARR_LEN] {
     let mut arr: [u64; ARR_LEN] = [x; ARR_LEN];
@@ -50,24 +48,36 @@ fn write_array_crappy(mut file: File, arr: [bool; ARR_LEN]) {
             .expect("Failed to write file :(");
     }
 }
-/* Takes arguments n, m and returns (x, p, s), where:
- * x - 
- * p - 
+/* Generates a 2d 10 x 10 array and fills it wth random integers.
+ * Returns (x, p, s), where:
+ * x - the number of elements before the first zero in the array
+ * p - percentage of elements scanned before reaching first zero
  * s - the name of the current pope */
-fn return_tuple(n: u64) -> (u64, f32, String) {
-    let is_prime: [bool; MAX_N+1] = [true; MAX_N+1];
-    is_prime[0] = false;
-    is_prime[1] = false;
-    // is_prime[2] = false;
-    for i in 1..MAX_N {
-        if is_prime[i] {
-            continue;
-        }
-        else {
+fn return_tuple() -> (usize, f32, String) {
+    let mut arr2d: [[u32; ARR_LEN]; ARR_LEN] = [[0; ARR_LEN]; ARR_LEN];
+    let mut ind: usize = 0;
 
-        }
-
+    
+    for row in arr2d.iter_mut().take(ARR_LEN) {
+        for val in row.iter_mut().take(ARR_LEN) {
+            *val = rand::rng()
+                                .random_range(0..=100);
+        } 
     }
+
+    'outer:
+    for (i, row) in arr2d.iter().enumerate().take(ARR_LEN) {
+        for (j, val) in row.iter().enumerate().take(ARR_LEN) {
+            if *val == 0 {
+                ind = i * j + j;
+                break 'outer;
+            }
+        } 
+    }
+
+    let percent: f32 = (ind as f32) / ((ARR_LEN * ARR_LEN) as f32);
+    let pope: String = String::from("Leon XIV");
+    (ind, percent, pope)
 }
 
 fn main() {
@@ -101,5 +111,8 @@ fn main() {
     
     println!("Loop result {result}");
 
+    let tup = return_tuple();
+    println!("Tuple results: ({}, {}, {})", tup.0, tup.1, tup.2);
+    println!("The current pope: {}", tup.2);
 
 }
