@@ -58,16 +58,16 @@ fn return_tuple() -> (usize, f32, String) {
     let mut ind: usize = 0;
 
     
-    for row in arr2d.iter_mut().take(ARR_LEN) {
-        for val in row.iter_mut().take(ARR_LEN) {
+    for row in &mut arr2d {
+        for val in row {
             *val = rand::rng()
                                 .random_range(0..=100);
         } 
     }
 
     'outer:
-    for (i, row) in arr2d.iter().enumerate().take(ARR_LEN) {
-        for (j, val) in row.iter().enumerate().take(ARR_LEN) {
+    for (i, row) in arr2d.iter().enumerate() {
+        for (j, val) in row.iter().enumerate() {
             if *val == 0 {
                 ind = i * j + j;
                 break 'outer;
