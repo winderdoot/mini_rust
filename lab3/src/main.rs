@@ -8,6 +8,36 @@ use my_impl::*;
 
 fn main() {
     // TODO: Rąbnąć tutaj coś policzyć jakies wyrażonko
+    let ex1 = E::add(
+        E::mul(E::inv(E::var(Var::X)), E::add(E::var(Var::Y), E::neg(E::var(Var::Z)))), 
+        E::inv(
+            E::add(
+                E::mul(E::constant(Const::Named("uwu".to_string())), E::inv(E::constant(Const::Numeric(2)))),
+                E::mul(E::neg(E::constant(Const::Numeric(2137))), E::var(Var::Y))
+            )
+        )
+    );
+    println!("big expression:\n{}", ex1.to_string());
+    let ex2 = E::func("f".to_string(), ex1.clone());
+    println!("big func:\n{}", ex2.to_string());
+    let ex3 = ex1.clone().substitute("uwu", ex2.clone());
+    println!("even bigger expression:\n{}", ex3.to_string());
+    let ex3diff = ex3.diff(Var::Y);
+    println!("Really big diff:\n{}", ex3diff.to_string());
+    
+
+    let e1 = E::inv(E::inv(ex1.clone()));
+    print!("\nTrying uninv\n");
+    println!("e1:\n{}", e1.to_string());
+    let e2 = e1.clone().uninv();
+    println!("e1.uninvr():\n{}", e2.to_string());
+    let e3 = e1.clone().unneg();
+    println!("e1.unneg():\n{}", e3.to_string());
+
+    let e4 = ex3diff.substitute("uwu", e1.clone()).diff(Var::Y);    
+    println!("Even even bigger expr:\n{}", e4.to_string());
+    println!("arg count: {}", e4.arg_count());
+
 }
 
 #[cfg(test)]
