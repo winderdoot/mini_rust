@@ -1,11 +1,15 @@
-use std::{collections::BTreeSet, fs, hint::{self, black_box}, io::{self, ErrorKind, Read, Write}, net::{TcpListener, TcpStream}, num::NonZero, os::unix::ffi::OsStrExt, path::PathBuf, str::FromStr, time::{Duration, Instant}};
+use std::{collections::BTreeSet, fs, hint::{self}, io::{self, ErrorKind, Read, Write}, net::{TcpListener, TcpStream}, num::NonZero, os::unix::ffi::OsStrExt, path::PathBuf, str::FromStr, time::{Duration, Instant}};
+
+const NEWLINE: [u8;2] = [0xd, 0xa];
+#[allow(dead_code)]
+const SPACE: [u8;1] = [0x20];
 
 fn divisors(n: NonZero<u32>) -> BTreeSet<NonZero<u32>> {
     let mut set = BTreeSet::<NonZero<u32>>::new();
 
     let mut i: u32 = 1;
     loop {
-        if n.get() % i == 0 {
+        if n.get().is_multiple_of(i) {
             set.insert(NonZero::<u32>::new(i).unwrap());
             set.insert(NonZero::<u32>::new(n.get() / i).unwrap());
         }   
@@ -21,9 +25,9 @@ fn divisors(n: NonZero<u32>) -> BTreeSet<NonZero<u32>> {
     set
 }
 
-fn assert_sorted(vec: &Vec<u32>) {
+fn assert_sorted(vec: &[u32]) {
     for x in vec.windows(2) {
-        if x[1] < x[0] {
+        if x[0] > x[1] {
             panic!("vec is not sorted!");
         }
     }
@@ -62,7 +66,7 @@ fn bulk_write(stream: &mut TcpStream, buf: &[u8]) -> io::Result<()> {
 
 fn bulk_read(stream: &mut TcpStream, size: usize) -> io::Result<Vec<u8>> {
     let mut size = size;
-    let mut bytes: Vec<u8> = Vec::new();
+    let mut bytes: Vec<u8> = vec![0; size];
     let mut slice: &mut [u8] = &mut bytes;
     while size > 0 {
         match stream.read(slice) {
@@ -70,7 +74,7 @@ fn bulk_read(stream: &mut TcpStream, size: usize) -> io::Result<Vec<u8>> {
                 slice = &mut slice[amount..];
                 size -= amount;
             },
-            Err(e) if e.kind() == ErrorKind::Interrupted => todo!(),
+            Err(e) if e.kind() == ErrorKind::Interrupted => {},
             Err(e) => return Err(e),
         }
     }
@@ -78,20 +82,79 @@ fn bulk_read(stream: &mut TcpStream, size: usize) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn handle_client(mut stream: TcpStream) -> io::Result<()> {
-    /* Klient ma przesłać:
-     * maks do 200 bajtów ścieżki, zakończonej \n
-     */
-    let max_n = 200;
-    let mut read_bytes: usize = 0;
-    let path_bytes = String::new();
+/* Nigdy nie sądziłem że będzie mi potrzebny algorytm tekstowy z asdów 2. Co ja robię */
+fn calc_p(pattern: &[u8]) -> Vec<usize>
+{
+    let m = pattern.len() + 1;
+    let mut p: Vec<usize> = vec![0; m];
+    let mut len = 0;
 
-    while read_bytes < ma_n {
-        // match 
+    for j in 2..m {
+        /* Można łatwo rozszerzyć prefisko sufiks */
+        if pattern[len] == pattern[j - 1] {
+            p[j] = len + 1;
+            continue;
+        }
+        /* Nie ma żadnego prefikso-sufiksu */
+        else if len == 0 {
+            p[j] = 0;
+            continue;
+        }
+        /* Szukamy w policzonym już pod-prefikso-sufiksie  */
+        loop {
+            len = p[len];
+            if !(len > 0 && pattern[len] != pattern[j - 1]) {
+                break;
+            }
+        }
+        if pattern[len] == pattern[j - 1] {
+            p[j] = len + 1;
+        }
     }
-    // Przeczytać bajt po bajcie aż będzie new line character. Chyba że przekroczono 200 znaków wtedy error wysłać klientowi
-    // let mut path_bytes = vec![0; n];
-    // stream.read_exact(&mut path_bytes)?;
+
+    p
+}
+
+// end to u mnie \cr\lf czyli 0xad
+fn read_until(stream: &mut TcpStream, end: &[u8]) -> io::Result<Vec<u8>> {
+    if end.is_empty() {
+        return Err(io::Error::other("end must be non zero length!"));
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    let p = calc_p(end); // Optymalizacja żeby funkcja była liniowa względem długości terminatora xd
+    let end_size = end.len();
+    let mut i = 0;
+
+    loop {
+        match bulk_read(stream, 1) {
+            Ok(read) => bytes.extend(read),
+            Err(e) => return Err(e),
+        };
+
+        if *bytes.last().unwrap() == end[i] {
+            i += 1;
+        } else {
+            i = p[i];
+        }
+        if i == end_size {
+            bytes.truncate(bytes.len() - end_size);
+            return Ok(bytes);
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn test_client(mut stream: TcpStream) -> io::Result<()> {
+    loop {
+        let bytes: Vec<u8> = read_until(&mut stream, &NEWLINE)?;
+        bytes.iter().for_each(|b| print!("{:#x} ", b));
+        println!();
+    }
+}
+
+fn handle_client(mut stream: TcpStream) -> io::Result<()> {
+    
+    let path_bytes = read_until(&mut stream, &NEWLINE)?;
 
     let path_str = match String::from_utf8(path_bytes) {
         Ok(s) => s,
@@ -119,10 +182,13 @@ fn handle_client(mut stream: TcpStream) -> io::Result<()> {
     for ent in dir_iter {
         match ent {
             Ok(e) => {
-                stream.write_all(e.file_name().as_bytes())?;
+                let mut file_name_bytes: Vec<u8> = e.file_name().as_bytes().to_vec();
+                file_name_bytes.extend(NEWLINE);
+                bulk_write(&mut stream, &file_name_bytes)?;
             },
             Err(e) => {
-                stream.write_all(format!("{}\n", e.to_string()).as_bytes())?;
+                println!("[ERROR]{}", e);
+                bulk_write(&mut stream, "Bad dir\n".as_bytes())?;
                 return Ok(())
             },
         }
@@ -152,10 +218,13 @@ fn tcp_server(port: u32) -> io::Result<()> {
 fn main() {
 
     println!("Average diviros() time: {} ms", benchmark_divisors(10000));
+    let mut v: Vec<u32> = vec![2, 5, 1, 624, 2367, 1235, 2137, 11, 751];
+    v.sort();
+    assert_sorted(&v);
 
     match tcp_server(5000) {
         Ok(_) => println!("Server closing."),
-        Err(e) => println!("[ERROR]: {}", e.to_string()),
+        Err(e) => println!("[ERROR]: {}", e),
     }
 
 }
