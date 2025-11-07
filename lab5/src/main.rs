@@ -2,12 +2,55 @@ mod lab5;
 use lab5::*;
 
 fn main() {
-    let context = Context::new();
+    let mut context = Context::new();
 
     let mut x = nothing();
     x.exec_stmt(&context);
 
-    println!("stuffies!!\n");
+    let mut stmt = 
+        seq(
+            repeat::<5u32, _>(
+                print(
+                    when(0, 56, 21)
+                )
+            ),
+            print(37)
+        );
+    stmt.exec_stmt(&context);
+
+    let mut s = seq(nothing(), print(1)).shorten_2();
+    let mut s1 = seq(print(1), nothing()).shorten_1();
+    let mut s2 = seq(nothing(), nothing()).collapse();
+    s.exec_stmt(&context);
+    s1.exec_stmt(&context);
+    s2.exec_stmt(&context);
+    
+    context.insert("maciuś", 4);
+    context.insert("uwu", 2136);
+
+    let mut d = 2;
+    let x = save_in(&mut d, constant("maciuś")).exec_expr(&context);
+    let mut read = read_from(&x);
+
+    read.exec_expr(&context);
+
+    let uwu = "
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⢀⡴⣆⠀⠀⠀⠀⠀⣠⡀ ᶻ 𝗓 𐰁 .ᐟ ⣼⣿⡗⠀⠀⠀⠀
+    ⠀⠀⠀⣠⠟⠀⠘⠷⠶⠶⠶⠾⠉⢳⡄⠀⠀⠀⠀⠀⣧⣿⠀⠀⠀⠀⠀
+    ⠀⠀⣰⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣤⣤⣤⣤⣤⣿⢿⣄⠀⠀⠀⠀
+    ⠀⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣧⠀⠀⠀⠀⠀⠀⠙⣷⡴⠶⣦
+    ⠀⠀⢱⡀⠀⠉⠉⠀⠀⠀⠀⠛⠃⠀⢠⡟⠀⠀⠀⢀⣀⣠⣤⠿⠞⠛⠋
+    ⣠⠾⠋⠙⣶⣤⣤⣤⣤⣤⣀⣠⣤⣾⣿⠴⠶⠚⠋⠉⠁⠀⠀⠀⠀⠀⠀
+    ⠛⠒⠛⠉⠉⠀⠀⠀⣴⠟⢃⡴⠛⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠛⠛⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀";
+    context.insert(uwu, 69);
+    let mut new_uwu = 70;
+    let mut uwu_expr = volatile(&mut new_uwu, "uwu", when(constant(uwu), 420, 233));
+    let uwu_evaluaed = uwu_expr.exec_expr(&context);
+
+    println!("evaluation of uwu: {}\n", uwu_evaluaed);
+
 }
 
 #[cfg(test)]
