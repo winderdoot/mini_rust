@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
-use crate::core::errors::{self, DbError, DbResult};
+use crate::core::errors::{DbError, DbResult, RecordError};
+
 
 /* === DatabaseKey === */
+
 pub trait DatabaseKey
 where 
 Self: Sized,
@@ -34,7 +36,8 @@ impl DatabaseKey for String {
     }
 }
 
-/* === Tables ===  */
+
+/* === Record ===  */
 
 pub enum Value {
     Bool(bool),
@@ -46,6 +49,25 @@ pub enum Value {
 pub struct Record {
     fields: HashMap<String, Value>
 }
+
+impl Record {
+    fn matches(&self, format: &Record) -> Result<(), RecordError> {
+        for field in format.fields.keys() {
+            if !self.fields.contains_key(field) {
+                return Err(RecordError::MissingField(field.to_string()));
+            }
+        }
+        for field in self.fields.keys() {
+            if !format.fields.contains_key(field) {
+                return Err(RecordError::InvalidField(field.to_string()));
+            }
+        }
+        Ok(())
+    }
+}
+
+
+/* === Table === */
 
 pub struct Table<K: DatabaseKey> {
     curr_key: K,
@@ -62,16 +84,21 @@ impl<K: DatabaseKey> Table<K> {
         }
     }
 
-    fn next_key(&mut self) -> DbResult<K> {
+    pub fn next_key(&mut self) -> DbResult<K> {
         let prev = self.curr_key.clone();
         self.curr_key = self.curr_key.next()?;
         Ok(prev)
     }
 
-    pub fn insert(&mut self, record: Record) -> DbResult<()> {
-        todo!("Check if all fields in record are the same as in format")
+    pub fn insert(&mut self, record: Record) -> Result<(), RecordError> {
+        record.matches(&self.format)?;
+        self.records.insert(key, value)
+        todo!();
     }
 }
+
+
+/* === Database === */
 
 pub struct Database<K: DatabaseKey> {
     tables: HashMap<String, Table<K>>,

@@ -1,4 +1,6 @@
 mod lab5;
+use std::fmt::Display;
+
 use lab5::*;
 
 fn main() {
