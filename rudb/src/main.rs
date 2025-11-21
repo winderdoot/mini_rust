@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use rudb::{cli::commands::{AnyCommand, Command, token_stream}, database::{AnyDatabase, Database}};
+use rudb::{cli::commands::{AnyCommand, Command, token_stream}, database::{AnyDatabase, Database, DatabaseKey}};
 use std::io::{self, Error};
 
 /// CLI interface for an in-memory rust database program
@@ -20,24 +20,25 @@ enum KeyType {
 
 /* Commands  */
 
-fn handle_line(line: &str, database: &mut AnyDatabase) {
-    let mut tokens = token_stream(line);
-    
-    match database {
-        AnyDatabase::StringDatabase(database) => {
-            match AnyCommand::parse_from(&mut tokens, database).as_mut() {
-                Ok(command) => command.exec(),
-                Err(err) => println!("{err}"),
+fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>) {
+    let mut tokens = token_stream(input);
+
+    match AnyCommand::parse_from(&mut tokens, database).as_mut() {
+        Ok(command) => {
+            match command.exec() {
+                Ok(_) => { },
+                Err(err) => println!("Database error: {err}"),
             }
         },
-        AnyDatabase::IntDatabase(database) => {
-            match AnyCommand::parse_from(&mut tokens, database).as_mut() {
-                Ok(command) => command.exec(),
-                Err(err) => println!("{err}"),
-            }
-        },
+        Err(err) => println!("Parse error: {err}"),
     }
-    
+}
+
+fn handle_line(line: &str, database: &mut AnyDatabase) {
+    match database {
+        AnyDatabase::StringDatabase(database) => handle_db(line, database),
+        AnyDatabase::IntDatabase(database) => handle_db(line, database),
+    }
 }
 
 

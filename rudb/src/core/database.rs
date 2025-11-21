@@ -1,23 +1,23 @@
 use std::collections::{BTreeMap, HashMap};
-use crate::{cli::commands::Create, core::errors::*};
+use crate::{core::errors::*};
 
 
 /* === DatabaseKey === */
 
 pub trait DatabaseKey
 where 
-Self: Sized + ToString + Clone + Ord {
-    fn to_field_type() -> FieldType;
+Self: Sized + ToString + Clone + Ord + PartialEq {
+    fn get_type() -> FieldType;
 }
 
 impl DatabaseKey for i64 {
-    fn to_field_type() -> FieldType {
+    fn get_type() -> FieldType {
         FieldType::Int
     }
 }
 
 impl DatabaseKey for String {
-    fn to_field_type() -> FieldType {
+    fn get_type() -> FieldType {
         FieldType::String
     }
 }
@@ -30,7 +30,7 @@ impl DatabaseKey for String {
 
 /* === Schema ===  */
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum FieldType {
     Bool,
     String,
@@ -38,11 +38,22 @@ pub enum FieldType {
     Float
 }
 
+impl ToString for FieldType {
+    fn to_string(&self) -> String {
+        match self {
+            FieldType::Bool => "bool".to_string(),
+            FieldType::String => "string".to_string(),
+            FieldType::Int => "int".to_string(),
+            FieldType::Float => "float".to_string(),
+        }
+    }
+}
 
-/// Contains the column names and types of a table, excluding the primary key, due to how we implement the database.
+
+/// Contains the column names and types of a table, including the primary key
 #[derive(Clone)]
 pub struct Schema {
-    columns: HashMap<String, FieldType>,
+    fields: HashMap<String, FieldType>,
     key: String
 }
 
@@ -51,7 +62,19 @@ impl Schema {
         if !map.contains_key(key) {
             return None;
         }
-        Some(Schema { columns: map, key: key.to_string() })
+        Some(Schema { fields: map, key: key.to_string() })
+    }
+
+    pub fn get_key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn get_key_type(&self) -> Option<&FieldType> {
+        self.fields.get(&self.key)
+    }
+
+    pub fn get_fields(&self) -> &HashMap<String, FieldType> {
+        &self.fields
     }
 }
 
@@ -62,23 +85,39 @@ pub enum Value {
     Float(f64),
 }
 
+impl Value {
+    pub fn get_type(&self) -> FieldType {
+        match self {
+            Value::Bool(_) => FieldType::Bool,
+            Value::String(_) => FieldType::String,
+            Value::Int(_) => FieldType::Int,
+            Value::Float(_) => FieldType::Float,
+        }
+    }
+}
+
 pub struct Record {
     fields: HashMap<String, Value>
 }
 
 impl Record {
     fn matches(&self, schema: &Schema) -> Result<(), RecordError> {
-        for field in schema.columns.keys() {
+        for field in schema.fields.keys() {
             if !self.fields.contains_key(field) {
                 return Err(RecordError::MissingField(field.to_string()));
             }
         }
+
         for field in self.fields.keys() {
-            if !schema.columns.contains_key(field) {
+            if !schema.fields.contains_key(field) {
                 return Err(RecordError::InvalidField(field.to_string()));
             }
         }
         Ok(())
+    }
+
+    pub fn from_map(map: HashMap<String, Value>) -> Self {
+        Self { fields: map }
     }
 }
 
@@ -86,19 +125,40 @@ impl Record {
 /* === Table === */
 
 pub struct Table<K: DatabaseKey> {
+    name: String,
     schema: Schema,
-    records: BTreeMap<K, Record>,
+    records: BTreeMap<K, Record>, /* Record also contains a copy of the key */
 }
 
 impl<K: DatabaseKey> Table<K> {
-    pub fn from_schema(schema: &Schema) -> Self {
+    pub fn from_schema(name: &str, schema: &Schema) -> Self {
         Table::<K> {
+            name: name.to_string(),
             schema: schema.clone(),
             records: BTreeMap::<K, Record>::new()
         }
     }
-}
 
+    pub fn get_schema(&self) -> &Schema {
+        &self.schema
+    }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn insert(&mut self, key: K, record: Record) -> Result<(), DbErr> {
+        match self.records.insert(key.clone(), record) {
+            Some(_) => {
+                return Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?;
+            },
+            None => {
+                return Ok(())
+            },
+        }
+    }
+
+}
 
 
 /* === Database === */
@@ -114,43 +174,28 @@ impl<K: DatabaseKey> Database<K> {
         }
     }
 
-    pub fn get_table_mut(&mut self, table: &str) -> Option<&mut Table<K>> {
-        self.tables.get_mut(table)
+    pub fn get_table_mut(&mut self, table: &str) -> Result<&mut Table<K>, DbErr> {
+        Ok(self.tables.get_mut(table).ok_or_else(|| InsertErr::TableNotFound(table.to_string()))?)
     }
 
-    pub fn add_table(&mut self, table: &str, schema: &Schema) -> Result<(), CreateErr> {
+    pub fn add_table(&mut self, table: &str, schema: &Schema) -> Result<(), DbErr> {
         if self.tables.contains_key(table) {
-            return Err(CreateErr::AlreadyExists { table: table.to_string() });
+            Err(CreateErr::AlreadyExists { table: table.to_string() })?;
         }
-        self.tables.insert(table.to_string(), Table::from_schema(schema));
+        let schema_key = schema
+            .get_key_type()
+            .ok_or_else(|| DbErr::Unreachable)?;
+        schema_key
+            .ne(&K::get_type())
+            .then_some(())
+            .map_or_else(|| Ok(()), |_| Err(InsertErr::InvalidKeyType { got: schema_key.to_string(), expected: K::get_type().to_string() }))?;
+            
+        self.tables.insert(table.to_string(), Table::from_schema(table, schema));
 
         Ok(())
     }
 
-    pub fn insert_into(&mut self, table: &str, record: Record, key: K) -> Result<(), InsertErr> {
-        let res = self.tables
-            .get_mut(table)
-            .ok_or(InsertErr::TableNotFound(table.to_string()))?;
-        match record.matches(&res.schema) {
-            Ok(_) => {},
-            Err(RecordError::InvalidField(f)) => {
-                return Err(InsertErr::InvalidField { table: table.to_string(), field: f });
-            },
-            Err(RecordError::MissingField(f)) => {
-                return Err(InsertErr::MissingField { table: table.to_string(), field: f });
-            }
-        }
-        match res.records.insert(key.clone(), record) {
-            Some(_) => {
-                return Err(InsertErr::KeyUsed { table: table.to_string(), key: key.to_string() });
-            },
-            None => {
-                return Ok(())
-            },
-        }
-    }
-
-    pub fn delete_from(&mut self, table: &str, key: K) -> Result<(), DeleteErr> {
+    pub fn delete_from(&mut self, table: &str, key: K) -> Result<(), DbErr> {
         let res = self.tables
             .get_mut(table)
             .ok_or(DeleteErr::TableNotFound(table.to_string()))?;
