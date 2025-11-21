@@ -26,6 +26,7 @@ impl DatabaseKey for String {
 
 /* === Schema ===  */
 
+#[derive(Clone)]
 pub enum FieldType {
     Bool,
     String,
@@ -33,16 +34,20 @@ pub enum FieldType {
     Float
 }
 
+
 /// Contains the column names and types of a table, excluding the primary key, due to how we implement the database.
+#[derive(Clone)]
 pub struct Schema {
-    columns: HashMap<String, FieldType>
+    columns: HashMap<String, FieldType>,
+    key: String
 }
 
 impl Schema {
-    pub fn from_hashmap(map: HashMap<String, FieldType>) -> Self {
-        Schema {
-            columns: map
+    pub fn from_map(map: HashMap<String, FieldType>, key: &str) -> Option<Self> {
+        if !map.contains_key(key) {
+            return None;
         }
+        Some(Schema { columns: map, key: key.to_string() })
     }
 }
 
@@ -82,13 +87,14 @@ pub struct Table<K: DatabaseKey> {
 }
 
 impl<K: DatabaseKey> Table<K> {
-    pub fn from_schema(schema: Schema) -> Self {
+    pub fn from_schema(schema: &Schema) -> Self {
         Table::<K> {
-            schema,
+            schema: schema.clone(),
             records: BTreeMap::<K, Record>::new()
         }
     }
 }
+
 
 
 /* === Database === */
@@ -104,8 +110,17 @@ impl<K: DatabaseKey> Database<K> {
         }
     }
 
-    pub fn add_table(&mut self, name: &str, schema:&Schema) -> Result<(), CreateErr> {
-        todo!();
+    pub fn get_table_mut(&mut self, table: &str) -> Option<&mut Table<K>> {
+        self.tables.get_mut(table)
+    }
+
+    pub fn add_table(&mut self, table: &str, schema: &Schema) -> Result<(), CreateErr> {
+        if self.tables.contains_key(table) {
+            return Err(CreateErr::AlreadyExists { table: table.to_string() });
+        }
+        self.tables.insert(table.to_string(), Table::from_schema(schema));
+
+        Ok(())
     }
 
     pub fn insert_into(&mut self, table: &str, record: Record, key: K) -> Result<(), InsertErr> {
@@ -147,6 +162,15 @@ impl<K: DatabaseKey> Database<K> {
 pub enum AnyDatabase {
     StringDatabase(Database<String>),
     IntDatabase(Database<i64>),
+}
+
+impl AnyDatabase {
+    pub fn key_type(&self) -> FieldType {
+        match self {
+            AnyDatabase::StringDatabase(_) => FieldType::String,
+            AnyDatabase::IntDatabase(_) => FieldType::Int,
+        }
+    }
 }
 
 

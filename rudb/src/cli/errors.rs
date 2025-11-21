@@ -18,7 +18,10 @@ pub enum ParseErr {
     #[error("Column with name '{0}' repeats. Consider choosing another column name")]
     ColumnExists(String),
     #[error("Column name cannot contain '{0}'")]
-    ColumnInvalidChar(char)
+    ColumnInvalidChar(char),
+    #[error("Unreachable error")]
+    Unreachable
+
 }
 
 pub type ParseResult<'a> = Result<AnyCommand<'a>, ParseErr>;

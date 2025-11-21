@@ -1,6 +1,6 @@
-use std::{collections::HashMap, iter::Peekable};
+use std::{collections::HashMap, iter::Peekable, string::ParseError};
 
-use crate::{cli::errors::{self, ParseErr, ParseResult}, database::{AnyDatabase, FieldType, Schema}, errors::DbResult};
+use crate::{cli::errors::{self, ParseErr, ParseResult}, database::{AnyDatabase, DatabaseKey, FieldType, Schema, Table}, errors::DbResult};
 
 
 /* Parsing helpers */
@@ -116,18 +116,17 @@ pub trait Command
 where 
 Self: Sized {
     /// Execute command on a database. The output is printed to stdout.
-    fn exec_on(&self, database: &mut AnyDatabase);
+    fn exec(&mut self);
 }
 
 
-/* Structs  */
+/* Create  */
 
 const COLUMN_NAME_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 
 pub struct Create<'a> {
     database: &'a mut AnyDatabase,
     table: String,
-    key: String, 
     schema: Schema,
 }
 
@@ -142,7 +141,7 @@ impl<'a> Create<'a> {
         let key = next_token(tokens, "KEY", "<KEY_NAME>")?;
         expect_token(tokens, key, "FIELDS")?;
 
-        let mut schema_map = HashMap::<String, FieldType>::new();
+        let mut schema_map = HashMap::<String, FieldType>::from([(key.to_string(), database.key_type())]);
         loop {
             let field_name = matches_charset(token_separator(tokens, "<COLUMN_NAME>", ":")?, COLUMN_NAME_CHARSET)?;
             let mut comma = false;
@@ -158,13 +157,14 @@ impl<'a> Create<'a> {
             expect_empty(tokens, ",")?;
             break;
         }
-        Ok(AnyCommand::Create(Create { database, table: table.to_string(), key: key.to_string(), schema: Schema::from_hashmap(schema_map) }))
+        let schema = Schema::from_map(schema_map, key).ok_or_else(|| ParseErr::Unreachable)?;
+        Ok(AnyCommand::Create(Create { database, table: table.to_string(), schema }))
     }
 }
 
 impl<'a> Command for Create<'a> {
-    fn exec_on(&self, database: &mut AnyDatabase) {
-        match database {
+    fn exec(&mut self) {
+        match self.database {
             AnyDatabase::StringDatabase(database) => {
                 match database.add_table(&self.table, &self.schema) {
                     Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
@@ -181,6 +181,65 @@ impl<'a> Command for Create<'a> {
     }
 }
 
+
+/* Insert */
+
+pub struct Insert<'a, K: DatabaseKey> {
+    table: &'a mut Table<K>,
+    key: String,
+    schema: Schema,
+}
+
+impl<'a, K: DatabaseKey> Insert<'a, K> {
+    pub fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut AnyDatabase) -> ParseResult<'a>
+    where 
+        I: Iterator<Item = &'b str>
+    {
+        let table = next_token(tokens, "INSERT", "<COLUMN NAME>")?;
+
+        let mut column_map = HashMap::<String, String>::new();
+        loop {
+            let field_name = matches_charset(token_separator(tokens, "<COLUMN_NAME>", "=")?, COLUMN_NAME_CHARSET)?;
+            let mut comma = false;
+            let field_val = token_maybe_separator(tokens, "<COLUMN_VALUE>", ",", &mut comma)?;
+            
+            match column_map.insert(field_name.to_string(), field_val.to_string()) {
+                Some(_) => return Err(ParseErr::ColumnExists(field_name.to_string())),
+                None => {},
+            }
+            if !comma {
+                break;
+            }
+        }
+        expect_token(tokens, "<COLUMN_VALUE>", "INTO")?;
+        let table_name = next_token(tokens, "INTO", "<TABLE_NAME>")?;
+        match database {
+            AnyDatabase::StringDatabase(database) => database.get_table_mut(table),
+            AnyDatabase::IntDatabase(database) => todo!(),
+        }
+
+        todo!();
+    }
+}
+
+// impl<'a> Command for Create<'a> {
+//     fn exec(&mut self) {
+//         match self.database {
+//             AnyDatabase::StringDatabase(database) => {
+//                 match database.add_table(&self.table, &self.schema) {
+//                     Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
+//                     Err(err) => println!("Database error: {}", err)
+//                 }
+//             },
+//             AnyDatabase::IntDatabase(database) => {
+//                 match database.add_table(&self.table, &self.schema) {
+//                     Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
+//                     Err(err) => println!("Database error: {}", err)
+//                 }
+//             }
+//         }
+//     }
+// }
 
 /* Enum  */
 
@@ -200,11 +259,19 @@ impl<'a> AnyCommand<'a> {
 
         match command_name.as_str() {
             "create" => {
-                return Ok(Create::parse_from(&mut tokens, database)?);
+                Create::parse_from(&mut tokens, database)
             },
             _ => {
-                return Err(ParseErr::UnknownCommand(command_name))
+                Err(ParseErr::UnknownCommand(command_name))
             }
+        }
+    }
+}
+
+impl<'a> Command for AnyCommand<'a> {
+    fn exec(&mut self) {
+        match self {
+            AnyCommand::Create(create) => create.exec(),
         }
     }
 }

@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use rudb::{cli::commands::AnyCommand, database::{AnyDatabase, Database}};
+use rudb::{cli::commands::{AnyCommand, Command}, database::{AnyDatabase, Database}};
 use std::io::{self, Error};
 
 /// CLI interface for an in-memory rust database program
@@ -20,9 +20,9 @@ enum KeyType {
 
 /* Commands  */
 
-fn handle_line<'a>(line: &str, database: &'a mut AnyDatabase) {
-    match AnyCommand::parse_from(line, database) {
-        Ok(_) => println!("Parse sucess!"),
+fn handle_line(line: &str, database: &mut AnyDatabase) {
+    match AnyCommand::parse_from(line, database).as_mut() {
+        Ok(command) => command.exec(),
         Err(err) => println!("{err}"),
     }
 }
@@ -38,6 +38,6 @@ fn main() {
 
     io::stdin()
         .lines()
-        .flatten()
+        .map_while(Result::ok)
         .for_each(|l| handle_line(&l, &mut database));
 }
