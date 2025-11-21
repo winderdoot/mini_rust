@@ -1,5 +1,5 @@
 use thiserror::Error;
-use crate::cli::commands::AnyCommand;
+use crate::{cli::commands::AnyCommand, database::DatabaseKey};
 
 #[derive(Error, Debug)]
 pub enum ParseErr {
@@ -24,4 +24,4 @@ pub enum ParseErr {
 
 }
 
-pub type ParseResult<'a> = Result<AnyCommand<'a>, ParseErr>;
+pub type ParseResult<'a, K: DatabaseKey> = Result<AnyCommand<'a, K>, ParseErr>;

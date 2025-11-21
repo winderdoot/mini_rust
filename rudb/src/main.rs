@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use rudb::{cli::commands::{AnyCommand, Command}, database::{AnyDatabase, Database}};
+use rudb::{cli::commands::{AnyCommand, Command, token_stream}, database::{AnyDatabase, Database}};
 use std::io::{self, Error};
 
 /// CLI interface for an in-memory rust database program
@@ -21,10 +21,23 @@ enum KeyType {
 /* Commands  */
 
 fn handle_line(line: &str, database: &mut AnyDatabase) {
-    match AnyCommand::parse_from(line, database).as_mut() {
-        Ok(command) => command.exec(),
-        Err(err) => println!("{err}"),
+    let mut tokens = token_stream(line);
+    
+    match database {
+        AnyDatabase::StringDatabase(database) => {
+            match AnyCommand::parse_from(&mut tokens, database).as_mut() {
+                Ok(command) => command.exec(),
+                Err(err) => println!("{err}"),
+            }
+        },
+        AnyDatabase::IntDatabase(database) => {
+            match AnyCommand::parse_from(&mut tokens, database).as_mut() {
+                Ok(command) => command.exec(),
+                Err(err) => println!("{err}"),
+            }
+        },
     }
+    
 }
 
 

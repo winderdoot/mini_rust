@@ -130,17 +130,15 @@ pub fn primes_loop(n: u32) -> Vec<u32> {
 pub fn primes(n: u32) -> Vec<u32> {
     (2..n)
         .scan(Vec::<u32>::new(), |primes, v| {
-            let is_prime = primes
+            primes
                 .iter()
                 .filter(|p| (*p) * (*p) <= v)
-                .all(|p| v % p != 0);
-            if is_prime {
-                primes.push(v);
-                Some(Some(v))
-            }
-            else {
-                Some(None)
-            }
+                .all(|p| v % p != 0)
+                .then(|| {
+                    primes.push(v);
+                    Some(v)
+                })
+                .or(Some(None))
         })
         .flatten()
         .collect()

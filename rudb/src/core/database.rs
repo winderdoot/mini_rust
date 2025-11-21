@@ -7,15 +7,19 @@ use crate::{cli::commands::Create, core::errors::*};
 pub trait DatabaseKey
 where 
 Self: Sized + ToString + Clone + Ord {
-    
+    fn to_field_type() -> FieldType;
 }
 
 impl DatabaseKey for i64 {
-
+    fn to_field_type() -> FieldType {
+        FieldType::Int
+    }
 }
 
 impl DatabaseKey for String {
-
+    fn to_field_type() -> FieldType {
+        FieldType::String
+    }
 }
 
 // pub enum AnyDbKey {

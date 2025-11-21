@@ -1,6 +1,6 @@
-use std::{collections::HashMap, iter::Peekable, string::ParseError};
+use std::{collections::HashMap, iter::Peekable, str::SplitWhitespace, string::ParseError};
 
-use crate::{cli::errors::{self, ParseErr, ParseResult}, database::{AnyDatabase, DatabaseKey, FieldType, Schema, Table}, errors::DbResult};
+use crate::{cli::errors::{self, ParseErr, ParseResult}, database::{AnyDatabase, Database, DatabaseKey, FieldType, Schema, Table}, errors::DbResult};
 
 
 /* Parsing helpers */
@@ -10,6 +10,11 @@ use crate::{cli::errors::{self, ParseErr, ParseResult}, database::{AnyDatabase, 
  * on the token trait and have readable syntax for what is supposed to follow the token and stuff.
  * Damn. 
  */
+
+pub fn token_stream<'a>(string: &'a str) -> Peekable<SplitWhitespace<'a>> 
+{
+    string.split_whitespace().peekable()
+}
 
 pub fn matches_charset<'a>(token: &'a str, charset: &str) -> Result<&'a str, ParseErr> {
     match token.chars().find(|c| !charset.contains(*c)) {
@@ -112,11 +117,18 @@ impl FieldType {
 
 /* Trait  */
 
-pub trait Command 
+pub trait Command<'a, K>
 where 
-Self: Sized {
+    Self: Sized,
+    K: DatabaseKey
+{
     /// Execute command on a database. The output is printed to stdout.
     fn exec(&mut self);
+
+    /// Parse command from a token iterator and a database
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
+    where
+        I: Iterator<Item = &'b str>;
 }
 
 
@@ -124,24 +136,30 @@ Self: Sized {
 
 const COLUMN_NAME_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 
-pub struct Create<'a> {
-    database: &'a mut AnyDatabase,
+pub struct Create<'a, K: DatabaseKey> {
+    database: &'a mut Database<K>,
     table: String,
     schema: Schema,
 }
 
-impl<'a> Create<'a> {
-    /// I am really not impressed with myself
-    pub fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut AnyDatabase) -> ParseResult<'a>
-    where 
-        I: Iterator<Item = &'b str>
+impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
+    fn exec(&mut self) {
+        match self.database.add_table(&self.table, &self.schema) {
+            Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
+            Err(err) => println!("Database error: {}", err)
+        }
+    }
+    
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
+    where
+        I: Iterator<Item = &'b str> 
     {
         let table = next_token(tokens, "CREATE", "<TABLE NAME>")?;
         expect_token(tokens, table, "KEY")?;
         let key = next_token(tokens, "KEY", "<KEY_NAME>")?;
         expect_token(tokens, key, "FIELDS")?;
 
-        let mut schema_map = HashMap::<String, FieldType>::from([(key.to_string(), database.key_type())]);
+        let mut schema_map = HashMap::<String, FieldType>::from([(key.to_string(), K::to_field_type())]);
         loop {
             let field_name = matches_charset(token_separator(tokens, "<COLUMN_NAME>", ":")?, COLUMN_NAME_CHARSET)?;
             let mut comma = false;
@@ -162,25 +180,6 @@ impl<'a> Create<'a> {
     }
 }
 
-impl<'a> Command for Create<'a> {
-    fn exec(&mut self) {
-        match self.database {
-            AnyDatabase::StringDatabase(database) => {
-                match database.add_table(&self.table, &self.schema) {
-                    Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
-                    Err(err) => println!("Database error: {}", err)
-                }
-            },
-            AnyDatabase::IntDatabase(database) => {
-                match database.add_table(&self.table, &self.schema) {
-                    Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
-                    Err(err) => println!("Database error: {}", err)
-                }
-            }
-        }
-    }
-}
-
 
 /* Insert */
 
@@ -190,8 +189,12 @@ pub struct Insert<'a, K: DatabaseKey> {
     schema: Schema,
 }
 
-impl<'a, K: DatabaseKey> Insert<'a, K> {
-    pub fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut AnyDatabase) -> ParseResult<'a>
+impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
+    fn exec(&mut self) {
+        todo!()
+    }
+
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
     where 
         I: Iterator<Item = &'b str>
     {
@@ -213,43 +216,23 @@ impl<'a, K: DatabaseKey> Insert<'a, K> {
         }
         expect_token(tokens, "<COLUMN_VALUE>", "INTO")?;
         let table_name = next_token(tokens, "INTO", "<TABLE_NAME>")?;
-        match database {
-            AnyDatabase::StringDatabase(database) => database.get_table_mut(table),
-            AnyDatabase::IntDatabase(database) => todo!(),
-        }
+        
 
         todo!();
     }
 }
 
-// impl<'a> Command for Create<'a> {
-//     fn exec(&mut self) {
-//         match self.database {
-//             AnyDatabase::StringDatabase(database) => {
-//                 match database.add_table(&self.table, &self.schema) {
-//                     Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
-//                     Err(err) => println!("Database error: {}", err)
-//                 }
-//             },
-//             AnyDatabase::IntDatabase(database) => {
-//                 match database.add_table(&self.table, &self.schema) {
-//                     Ok(_) => println!("Table '{}' succcessfuly added.", self.table),
-//                     Err(err) => println!("Database error: {}", err)
-//                 }
-//             }
-//         }
-//     }
-// }
-
 /* Enum  */
 
-pub enum AnyCommand<'a> {
-    Create(Create<'a>),
+pub enum AnyCommand<'a, K: DatabaseKey> {
+    Create(Create<'a, K>),
 }
 
-impl<'a> AnyCommand<'a> {
-    pub fn parse_from(str: &str, database: &'a mut AnyDatabase) -> ParseResult<'a> {
-        let mut tokens = str.split_whitespace().peekable();
+impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K> 
+    where 
+        I: Iterator<Item = &'b str>
+    {
         let mut command_name= tokens
             .next()
             .ok_or(ParseErr::Empty)?
@@ -259,16 +242,14 @@ impl<'a> AnyCommand<'a> {
 
         match command_name.as_str() {
             "create" => {
-                Create::parse_from(&mut tokens, database)
+                Create::parse_from(tokens, database)
             },
             _ => {
                 Err(ParseErr::UnknownCommand(command_name))
             }
         }
     }
-}
-
-impl<'a> Command for AnyCommand<'a> {
+    
     fn exec(&mut self) {
         match self {
             AnyCommand::Create(create) => create.exec(),
