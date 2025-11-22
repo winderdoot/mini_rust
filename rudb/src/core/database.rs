@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{collections::{BTreeMap, HashMap}, fmt::Display};
 use crate::{core::errors::*};
 
 
@@ -101,6 +101,17 @@ pub enum Value {
     Float(f64),
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Bool(v) => write!(f, "{}", v),
+            Value::String(v) => write!(f, "\"{}\"", *v),
+            Value::Int(v) => write!(f, "{}", v),
+            Value::Float(v) => write!(f, "{}", v),
+        }
+    }
+}
+
 impl Value {
     pub fn get_type(&self) -> FieldType {
         match self {
@@ -118,19 +129,15 @@ pub struct Record {
 }
 
 impl Record {
-    fn matches(&self, schema: &Schema) -> Result<(), RecordError> {
-        for field in schema.fields.keys() {
-            if !self.fields.contains_key(field) {
-                return Err(RecordError::MissingField(field.to_string()));
-            }
-        }
-
-        for field in self.fields.keys() {
-            if !schema.fields.contains_key(field) {
-                return Err(RecordError::InvalidField(field.to_string()));
-            }
-        }
-        Ok(())
+    fn filter(&self, fields: &Vec<String>) -> Result<Vec<&Value>, RecordErr> {
+        fields
+            .iter()
+            .map(|field| 
+                self.fields
+                    .get(field)
+                    .ok_or_else(|| RecordErr::InvalidField(field.clone()))
+            )
+            .collect::<Result<Vec<&Value>, RecordErr>>() // Woooow ale potężny collect. Najpotężniejszy collect
     }
 
     pub fn from_map(map: HashMap<String, Value>) -> Self {
@@ -187,8 +194,26 @@ impl<K: DatabaseKey> Table<K> {
         Ok(())   
     }
 
-    pub fn select(&mut self) -> Result<String, DbErr> {
-        todo!()
+    fn map_value_vec(record_vec: &Vec<&Value>, fields: &Vec<String>) -> String {
+        record_vec
+            .iter()
+            .enumerate()
+            .map(|(i, val)| format!("{}: {}", fields.get(i).unwrap_or(&"_".to_string()), *val))
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+
+    pub fn select(&mut self, fields: &Vec<String>) -> Result<String, DbErr> {
+        Ok (
+            self.records
+                .iter()
+                .map(|(_, record)| record.filter(fields))
+                .collect::<Result<Vec<Vec<&Value>>, RecordErr>>()?
+                .iter()
+                .map(|record_vec| Self::map_value_vec(record_vec, fields))
+                .collect::<Vec<String>>()
+                .join("\n")
+        )
     }
 
 }

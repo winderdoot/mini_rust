@@ -212,6 +212,7 @@ impl Record {
             let parsed_val = Value::parse_from(val_str, field_type)?;
             record_map.insert(field.to_string(), parsed_val);
         }
+        // Hm to chyba się dało collectem zrobic
         Ok(Record::from_map(record_map))
     }
 }
@@ -367,7 +368,7 @@ pub struct Select<'a, K: DatabaseKey> {
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
     fn exec(&mut self) -> Result<String, DbErr> {
-        
+
         todo!()
     }
 

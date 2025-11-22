@@ -8,6 +8,10 @@ pub enum DbErr {
     Insert(#[from] InsertErr),
     #[error(transparent)]
     Delete(#[from] DeleteErr),
+    #[error(transparent)]
+    Select(#[from] SelectErr),
+    #[error(transparent)]
+    Record(#[from] RecordErr),
     #[error("Unreachable error 🦀")]
     Unreachable,
 }
@@ -42,13 +46,19 @@ pub enum DeleteErr {
     TableNotFound(String),
 }
 
+#[derive(Error, Debug)]
+pub enum SelectErr {
+    #[error("Field '{field}' not found in table '{table}'")]
+    InvalidField { table: String, field: String },
+    #[error(transparent)]
+    Record(#[from] RecordErr)
+}
+
 pub type DbResult<T> = std::result::Result<T, DbErr>;
 
 
 #[derive(Error, Debug)]
-pub enum RecordError {
+pub enum RecordErr {
     #[error("Field '{0}' is inalid")]
     InvalidField(String),
-    #[error("Field '{0}' is missing")]
-    MissingField(String),
 }
