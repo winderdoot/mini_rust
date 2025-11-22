@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter::Peekable, str::SplitWhitespace};
+use std::{collections::HashMap, iter::Peekable};
 
 use crate::{cli::errors::{ParseErr, ParseResult}, database::{Database, DatabaseKey, FieldType, Record, Schema, Table, Value}, errors::DbErr};
 
@@ -11,9 +11,34 @@ use crate::{cli::errors::{ParseErr, ParseResult}, database::{Database, DatabaseK
  * Damn. 
  */
 
-pub fn token_stream<'a>(string: &'a str) -> Peekable<SplitWhitespace<'a>> 
+fn split_and_keep<'a>(text: &'a str, sep: &'a str) -> Vec<&'a str> {
+    let mut parts = Vec::new();
+    let mut last_end = 0;
+
+    for (start, matched) in text.match_indices(sep) {
+        if start > last_end {
+            parts.push(&text[last_end..start]);
+        }
+        parts.push(matched);
+        last_end = start + matched.len();
+    }
+
+    if last_end < text.len() {
+        parts.push(&text[last_end..]);
+    }
+
+    parts.into_iter().filter(|s| !s.is_empty()).collect()
+}
+
+pub fn token_stream<'a, I: Iterator<Item = &'a str>>(string: &'a str) -> Peekable<impl Iterator<Item = &'a str>> 
 {
-    string.split_whitespace().peekable()
+    string
+        .split_whitespace()
+        .flat_map(|tok| split_and_keep(tok, ","))
+        .flat_map(|tok| split_and_keep(tok, ":"))
+        .flat_map(|tok| split_and_keep(tok, "="))
+        .peekable()
+
 }
 
 pub fn matches_charset<'a>(token: &'a str, charset: &str) -> Result<&'a str, ParseErr> {
@@ -117,24 +142,55 @@ impl FieldType {
 
 
 impl Value {
+    fn parse_bool(string: &str) -> Result<Self, ParseErr> {
+        Ok(
+            string
+            .eq_ignore_ascii_case("true")
+            .then(|| Value::Bool(true))
+            .or_else(|| 
+                string
+                    .eq_ignore_ascii_case("false")
+                    .then(|| Value::Bool(false))
+            )
+            .ok_or_else(|| ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Bool.to_string() })?
+        )
+    }
+
+    // At this point I had no energy left to use method chaining
+    fn parse_string(string: &str) -> Result<Self, ParseErr> {
+        if string.len() < 2 {
+            return Err(ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::String.to_string() });
+        }
+        if !string.starts_with("\"") || !string.ends_with("\"") {
+            return Err(ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::String.to_string() }); 
+        }
+        let inner = &string[1..string.len() - 1];
+        if inner.contains("\"") {
+            return Err(ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::String.to_string() }); 
+        }
+        Ok(Value::String(inner.to_string()))
+    }
+
     fn parse_from(string: &str, target: &FieldType) -> Result<Self, ParseErr> {
         match target {
             FieldType::Bool => {
-                Ok(
-                    string
-                    .eq_ignore_ascii_case("true")
-                    .then(|| Value::Bool(true))
-                    .or_else(|| 
-                        string
-                            .eq_ignore_ascii_case("false")
-                            .then(|| Value::Bool(false))
-                    )
-                    .ok_or_else(|| ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Bool.to_string() })?
-                )
+                Self::parse_bool(string)
             },
-            FieldType::String => todo!(),
-            FieldType::Int => todo!(),
-            FieldType::Float => todo!(),
+            FieldType::String => { 
+                Self::parse_string(string)
+            },
+            FieldType::Int => {
+                match string.parse::<i64>() {
+                    Ok(v) => Ok(Value::Int(v)),
+                    Err(_) => Err(ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Int.to_string() }),
+                }
+            },
+            FieldType::Float => {
+                match string.parse::<f64>() {
+                    Ok(v) => Ok(Value::Float(v)),
+                    Err(_) => Err(ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Float.to_string() }),
+                }
+            }
         }
     }
 }
@@ -150,17 +206,13 @@ impl Record {
             .keys()
             .find(|field| !map.contains_key(*field))
             .map_or_else(|| Ok(()), |field| Err(ParseErr::MissingField { field: field.clone(), table: table.to_string() }))?;
-        let res: HashMap<String, Result<Value, ParseErr>> = map
-            .iter()
-            .map(|(field, val)| (*field, Value::parse_from(val)))
-            .collect();
-        // res
-        //     .iter()
-        //     .map(|(field, res)| )
-        //     .map_or_else(|| Ok(()), |(field, res)| (*res)?);
-
-
-        todo!("Think of a way to check if any values failed to parse. Worst case scenario use loops")
+        let mut record_map: HashMap<String, Value> = HashMap::new();
+        for (field, val_str) in map {
+            let field_type = schema.get_fields().get(field).ok_or_else(|| ParseErr::Unreachable)?;
+            let parsed_val = Value::parse_from(val_str, field_type)?;
+            record_map.insert(field.to_string(), parsed_val);
+        }
+        Ok(Record::from_map(record_map))
     }
 }
 
@@ -194,7 +246,7 @@ pub struct Create<'a, K: DatabaseKey> {
 impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
     fn exec(&mut self) -> Result<String, DbErr> {
         self.database.add_table(&self.table, &self.schema)?;
-        Ok(format!("Successfuly created '{}'", self.table))
+        Ok(format!("Successfuly created '{}'.", self.table))
     }
     
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
@@ -232,20 +284,20 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
 
 pub struct Insert<'a, K: DatabaseKey> {
     table: &'a mut Table<K>,
+    key: K,
     record: Record,
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
     fn exec(&mut self) -> Result<String, DbErr> {
-        todo!()
+        self.table.insert(&self.key.clone(), self.record.clone())?;
+        Ok(format!("Successfuly inserted."))
     }
 
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
     where 
         I: Iterator<Item = &'b str>
     {
-        let table = next_token(tokens, "INSERT", "<FIELD_NAME>")?;
-
         let mut field_map = HashMap::<String, String>::new();
         loop {
             let field_name = matches_charset(token_separator(tokens, "<FIELD_NAME>", "=")?, FIELD_NAME_CHARSET)?;
@@ -263,7 +315,80 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
         expect_token(tokens, "<FIELD_VALUE>", "INTO")?;
         let table = database.get_table_mut(next_token(tokens, "INTO", "<TABLE_NAME>")?)?;
         let record = Record::parse_from::<K>(&field_map, table.get_schema(), table.get_name())?;
-        Ok( AnyCommand::Insert(Insert::<'a, K> { table, record }))
+        let key = record.get_key::<K>(table.get_schema()).ok_or_else(|| ParseErr::Unreachable)?;
+
+        Ok( AnyCommand::Insert(Insert::<'a, K> { table, key, record }))
+    }
+}
+
+
+/* Delete */
+
+pub struct Delete<'a, K: DatabaseKey> {
+    table: &'a mut Table<K>,
+    key: K
+}
+
+impl<'a, K: DatabaseKey> Command<'a, K> for Delete<'a, K> {
+    fn exec(&mut self) -> Result<String, DbErr> {
+        self.table.delete(&self.key)?;
+        Ok(format!("Successfuly deleted."))
+    }
+
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
+    where
+        I: Iterator<Item = &'b str> 
+    {
+        let key_val_str = next_token(tokens, "DELETE", "<KEY_VALUE>")?;
+        expect_token(tokens, "<KEY_VALUE>", "FROM")?;
+        let table = database.get_table_mut(next_token(tokens, "FROM", "<TABLE_NAME>")?)?;
+        let key = K::from_value(
+            &Value::parse_from(
+                key_val_str, 
+                table
+                    .get_schema()
+                    .get_key_type()
+                    .ok_or_else(|| ParseErr::Unreachable)?
+            )?
+        )
+        .ok_or_else(|| ParseErr::Unreachable)?;
+    
+        Ok(AnyCommand::Delete(Delete::<'a, K> { table, key }))
+    }
+}
+
+
+/* Select */
+
+pub struct Select<'a, K: DatabaseKey> {
+    table: &'a mut Table<K>,
+    fields: Vec<String>,
+}
+
+impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
+    fn exec(&mut self) -> Result<String, DbErr> {
+        
+        todo!()
+    }
+
+    fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
+    where
+        I: Iterator<Item = &'b str> 
+    {
+        let mut fields= Vec::new();
+        loop {
+            let mut comma = false;
+            let field_name = matches_charset(token_maybe_separator(tokens, "<FIELD_NAME>", ",", &mut comma)?, FIELD_NAME_CHARSET)?;
+            
+            fields.push(field_name.to_string());
+            if !comma {
+                break;
+            }
+        }
+        expect_token(tokens, "<FIELD_NAME>", "FROM")?;
+        let table = database.get_table_mut(next_token(tokens, "FROM", "<TABLE_NAME>")?)?;
+
+        Ok(AnyCommand::Select(Select::<'a, K> { table, fields }))
     }
 }
 
@@ -271,14 +396,16 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
 
 pub enum AnyCommand<'a, K: DatabaseKey> {
     Create(Create<'a, K>),
-    Insert(Insert<'a, K>)
+    Insert(Insert<'a, K>),
+    Delete(Delete<'a, K>),
+    Select(Select<'a, K>),
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K> 
     where 
         I: Iterator<Item = &'b str>
-    {
+{
         let mut command_name= tokens
             .next()
             .ok_or(ParseErr::Empty)?
@@ -290,6 +417,12 @@ impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
             "create" => {
                 Create::parse_from(tokens, database)
             },
+            "insert" => {
+                Insert::parse_from(tokens, database)
+            },
+            "delete" => {
+                Delete::parse_from(tokens, database)
+            },
             _ => {
                 Err(ParseErr::UnknownCommand(command_name))
             }
@@ -299,7 +432,9 @@ impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
     fn exec(&mut self) -> Result<String, DbErr> {
         match self {
             AnyCommand::Create(create) => create.exec(),
-            AnyCommand::Insert(insert) => todo!(),
+            AnyCommand::Insert(insert) => insert.exec(),
+            AnyCommand::Delete(delete) => delete.exec(),
+            AnyCommand::Select(select) => select.exec(),
         }
     }
 }

@@ -36,7 +36,7 @@ pub enum InsertErr {
 
 #[derive(Error, Debug)]
 pub enum DeleteErr {
-    #[error("Key '{key}' not found in table '{table}'")]
+    #[error("Record with primary key '{key}' not found in table '{table}'")]
     InvalidKey { table: String, key: String },
     #[error("Table '{0}' not found")]
     TableNotFound(String),

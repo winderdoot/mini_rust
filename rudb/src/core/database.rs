@@ -8,17 +8,32 @@ pub trait DatabaseKey
 where 
 Self: Sized + ToString + Clone + Ord + PartialEq {
     fn get_type() -> FieldType;
+    fn from_value(val: &Value) -> Option<Self>;
 }
 
 impl DatabaseKey for i64 {
     fn get_type() -> FieldType {
         FieldType::Int
     }
+    
+    fn from_value(val: &Value) -> Option<Self> {
+        match val {
+            Value::Int(k) => Some(*k),
+            _ => None
+        }
+    }
 }
 
 impl DatabaseKey for String {
     fn get_type() -> FieldType {
         FieldType::String
+    }
+    
+    fn from_value(val: &Value) -> Option<Self> {
+        match val {
+            Value::String(k) => Some(k.clone()),
+            _ => None
+        }
     }
 }
 
@@ -78,6 +93,7 @@ impl Schema {
     }
 }
 
+#[derive(Clone)]
 pub enum Value {
     Bool(bool),
     String(String),
@@ -96,6 +112,7 @@ impl Value {
     }
 }
 
+#[derive(Clone)]
 pub struct Record {
     fields: HashMap<String, Value>
 }
@@ -118,6 +135,11 @@ impl Record {
 
     pub fn from_map(map: HashMap<String, Value>) -> Self {
         Self { fields: map }
+    }
+
+    pub fn get_key<K: DatabaseKey>(&self, schema: &Schema) -> Option<K> {
+        let key_val = self.fields.get(schema.get_key())?;
+        K::from_value(key_val)
     }
 }
 
@@ -147,7 +169,7 @@ impl<K: DatabaseKey> Table<K> {
         &self.name
     }
 
-    pub fn insert(&mut self, key: K, record: Record) -> Result<(), DbErr> {
+    pub fn insert(&mut self, key: &K, record: Record) -> Result<(), DbErr> {
         match self.records.insert(key.clone(), record) {
             Some(_) => {
                 return Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?;
@@ -156,6 +178,17 @@ impl<K: DatabaseKey> Table<K> {
                 return Ok(())
             },
         }
+    }
+
+    pub fn delete(&mut self, key: &K) -> Result<(), DbErr> {
+        self.records
+            .remove(key)
+            .ok_or(DeleteErr::InvalidKey { table: self.name.to_string(), key: key.to_string() })?;
+        Ok(())   
+    }
+
+    pub fn select(&mut self) -> Result<String, DbErr> {
+        todo!()
     }
 
 }
@@ -194,17 +227,6 @@ impl<K: DatabaseKey> Database<K> {
 
         Ok(())
     }
-
-    pub fn delete_from(&mut self, table: &str, key: K) -> Result<(), DbErr> {
-        let res = self.tables
-            .get_mut(table)
-            .ok_or(DeleteErr::TableNotFound(table.to_string()))?;
-        res.records
-            .remove(&key)
-            .ok_or(DeleteErr::InvalidKey { table: table.to_string(), key: key.to_string() })?;
-        Ok(())         
-    }
-
 
 }
 
