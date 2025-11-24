@@ -22,6 +22,7 @@ enum KeyType {
 
 fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>) {
     let mut tokens = token_stream::<SplitWhitespace>(input);
+    // println!("tokens:\n{:#?}", tokens.collect::<Vec<_>>());
 
     match AnyCommand::parse_from(&mut tokens, database).as_mut() {
         Ok(command) => {

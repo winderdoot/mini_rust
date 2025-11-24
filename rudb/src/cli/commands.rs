@@ -1,6 +1,6 @@
 use std::{collections::HashMap, iter::Peekable};
 
-use crate::{cli::errors::{ParseErr, ParseResult}, database::{Database, DatabaseKey, FieldType, Record, Schema, Table, Value}, errors::DbErr};
+use crate::{cli::errors::{ParseErr, ParseResult}, database::{Condition, Database, DatabaseKey, FieldType, Record, Schema, Table, Value}, errors::DbErr};
 
 
 /* Parsing helpers */
@@ -11,34 +11,43 @@ use crate::{cli::errors::{ParseErr, ParseResult}, database::{Database, DatabaseK
  * Damn. 
  */
 
-fn split_and_keep<'a>(text: &'a str, sep: &'a str) -> Vec<&'a str> {
+fn split_and_keep<'a>(text: &'a str, sep: &'a str, skip: bool) -> Vec<(&'a str, bool)> {
+    if skip {
+        return vec![(text, true)]
+    }
+
     let mut parts = Vec::new();
     let mut last_end = 0;
 
     for (start, matched) in text.match_indices(sep) {
         if start > last_end {
-            parts.push(&text[last_end..start]);
+            parts.push((&text[last_end..start], false));
         }
-        parts.push(matched);
+        parts.push((matched, true));
         last_end = start + matched.len();
     }
 
     if last_end < text.len() {
-        parts.push(&text[last_end..]);
+        parts.push((&text[last_end..], false));
     }
 
-    parts.into_iter().filter(|s| !s.is_empty()).collect()
+    parts.into_iter().filter(|(s, skip)| !s.is_empty()).collect()
 }
 
 pub fn token_stream<'a, I: Iterator<Item = &'a str>>(string: &'a str) -> Peekable<impl Iterator<Item = &'a str>> 
 {
     string
         .split_whitespace()
-        .flat_map(|tok| split_and_keep(tok, ","))
-        .flat_map(|tok| split_and_keep(tok, ":"))
-        .flat_map(|tok| split_and_keep(tok, "="))
+        .flat_map(|tok| split_and_keep(tok, ",", false))
+        .flat_map(|(tok, skip)| split_and_keep(tok, ":", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, "<=", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, ">=", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, "!=", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, "=", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, "<", skip))
+        .flat_map(|(tok, skip)| split_and_keep(tok, ">", skip))
+        .map(|(tok, _)| tok)
         .peekable()
-
 }
 
 pub fn matches_charset<'a>(token: &'a str, charset: &str) -> Result<&'a str, ParseErr> {
@@ -117,6 +126,33 @@ where
         })
 }
 
+// Previous separator functions allowed for the separator to be a postfix of the next token. This one expects it to be the next token, which it consumes
+pub fn token_any_separator<'a, I>(iter: &mut Peekable<I>, expect: &str, separators: &[&'a str], found_sep: &mut &'a str) -> Result<I::Item, ParseErr>
+where
+    I: Iterator<Item = &'a str>
+{
+    Ok(
+        iter
+        .next()
+        .ok_or(ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))
+        .map(|tok| {
+            let sep = *separators
+            .iter()
+            .find(|sep| {
+                iter
+                    .peek()
+                    .is_some_and(|next| *next == **sep)
+            })
+            .ok_or_else(|| ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))?;
+            *found_sep = sep;
+            iter.next(); // Consume the separator
+            
+            Ok(tok)
+        })
+        .flatten()?
+    )
+}
+
 pub fn expect_empty<'a, I>(iter: &mut Peekable<I>, expect: &str) -> Result<(), ParseErr>
 where
     I: Iterator<Item = &'a str>
@@ -127,6 +163,26 @@ where
     }
 }
 
+pub fn token_or_empty<'a, I>(iter: &mut Peekable<I>, prev: &str, expect: &str, empty: &mut bool) -> Result<Option<I::Item>, ParseErr>
+where 
+    I: Iterator<Item = &'a str> 
+{
+    match iter.peek() {
+        Some(tok) => {
+            *empty = false;
+            if tok.eq_ignore_ascii_case(expect) {
+                return Ok(iter.next());
+            }
+            else {
+                return Err(ParseErr::MissingToken { prev: prev.to_string(), missing: expect.to_string() });
+            }
+        },
+        None => {
+            *empty = true;
+            Ok(None)
+        },
+    }
+}
 
 impl FieldType {
     fn parse_from(string: &str) -> Result<Self, ParseErr> {
@@ -217,6 +273,36 @@ impl Record {
     }
 }
 
+
+impl Condition {
+    fn parse_from(op_str: &str, value: Value) -> Result<Self, ParseErr> {
+        match op_str {
+            ">" => {
+                Ok(Self::Greater(value))
+            },
+            "<" => {
+                Ok(Self::LessThan(value))
+            },
+            "=" => {
+                Ok(Self::Equals(value))
+            },
+            "!=" => {
+                Ok(Self::NotEquals(value))
+            },
+            ">=" => {
+                Ok(Self::GreaterEqual(value))
+            },
+            "<=" => {
+                Ok(Self::LessEqual(value))
+            },
+            other => {
+                Err(ParseErr::UnknownOperator(other.to_string()))
+            }
+        }
+    }
+}
+
+
 /* Trait  */
 
 pub trait Command<'a, K>
@@ -236,7 +322,8 @@ where
 
 /* Create  */
 
-const FIELD_NAME_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+const FIELD_NAME_CHARSET: &'static str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+const COND_OPERATORS: &[&'static str] = &["=", ">", "<", "!=", "<=", ">="];
 
 pub struct Create<'a, K: DatabaseKey> {
     database: &'a mut Database<K>,
@@ -275,6 +362,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
             expect_empty(tokens, ",")?;
             break;
         }
+
         let schema = Schema::from_map(schema_map, key).ok_or_else(|| ParseErr::MissingPrimaryKey(key.to_string()))?;
         Ok(AnyCommand::Create(Create { database, table: table.to_string(), schema }))
     }
@@ -364,12 +452,45 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Delete<'a, K> {
 pub struct Select<'a, K: DatabaseKey> {
     table: &'a mut Table<K>,
     fields: Vec<String>,
+    conditions: HashMap<String, Condition>
+}
+
+impl<'a, K: DatabaseKey> Select<'a, K> {
+    fn parse_where<'b, I>(tokens: &mut Peekable<I>, table: &Table<K>) -> Result<HashMap<String, Condition>, ParseErr>
+    where
+        I: Iterator<Item = &'b str>
+    {
+        let mut tokens_empty = false;
+        token_or_empty(tokens, "<TABLE_NAME>", "WHERE", &mut tokens_empty)?;
+        if tokens_empty {
+            return Ok(HashMap::new())
+        }
+        
+        let mut condidtions = HashMap::<String, Condition>::new();
+        loop {
+            let mut found_sep: &str = "";
+            let field_name = matches_charset(token_any_separator(tokens, "<FIELD_NAME>", COND_OPERATORS, &mut found_sep)?, FIELD_NAME_CHARSET)?;
+            let mut comma = false;
+            let field_type = table.get_field_type(field_name)?;
+            let field_val = Value::parse_from(token_maybe_separator(tokens, "<FIELD_VALUE>", ",", &mut comma)?, field_type)?;
+            let condition = Condition::parse_from(found_sep, field_val)?;
+            
+            match condidtions.insert(field_name.to_string(), condition) {
+                Some(_) => return Err(ParseErr::FieldExists(field_name.to_string())),
+                None => {},
+            }
+            if !comma {
+                break;
+            }
+        }
+        
+        Ok(condidtions)
+    }   
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
     fn exec(&mut self) -> Result<String, DbErr> {
-
-        todo!()
+        self.table.select(&self.fields, &self.conditions)
     }
 
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
@@ -389,7 +510,9 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
         expect_token(tokens, "<FIELD_NAME>", "FROM")?;
         let table = database.get_table_mut(next_token(tokens, "FROM", "<TABLE_NAME>")?)?;
 
-        Ok(AnyCommand::Select(Select::<'a, K> { table, fields }))
+        let conditions = Self::parse_where(tokens, table)?;
+
+        Ok(AnyCommand::Select(Select::<'a, K> { table, fields, conditions }))
     }
 }
 
@@ -423,6 +546,9 @@ impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
             },
             "delete" => {
                 Delete::parse_from(tokens, database)
+            },
+            "select" => {
+                Select::parse_from(tokens, database)
             },
             _ => {
                 Err(ParseErr::UnknownCommand(command_name))

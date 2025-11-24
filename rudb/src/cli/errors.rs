@@ -27,6 +27,8 @@ pub enum ParseErr {
     MissingField { field: String, table: String },
     #[error("Missing primary key '{0}' from FIELDS definiton")]
     MissingPrimaryKey(String),
+    #[error("Unknown operator '{0}'")]
+    UnknownOperator(String),
     #[error("Unreachable error 🥶")]
     Unreachable,
     #[error(transparent)]

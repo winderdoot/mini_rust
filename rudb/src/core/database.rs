@@ -121,6 +121,111 @@ impl Value {
             Value::Float(_) => FieldType::Float,
         }
     }
+
+    /* This is horrible */
+    pub fn eq(&self, right_op: &Value) -> Result<bool, ConditionErr> {
+        match (self, right_op) {
+            (Value::Bool(left), Value::Bool(right)) => {
+                Ok(left.eq(right))
+            },
+            (Value::Int(left), Value::Int(right)) => {
+                Ok(left.eq(right))  
+            },
+            (Value::String(left), Value::String(right)) => {
+                Ok(left.eq(right))  
+            },
+            (Value::Float(left), Value::Float(right)) => {
+                Ok(left.eq(right))  
+            },
+            _ => {
+                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+            }
+        }
+    }
+
+    /* This is horrible */
+    pub fn gt(&self, right_op: &Value) -> Result<bool, ConditionErr> {
+        match (self, right_op) {
+            (Value::Bool(left), Value::Bool(right)) => {
+                Ok(left.gt(right))
+            },
+            (Value::Int(left), Value::Int(right)) => {
+                Ok(left.gt(right))  
+            },
+            (Value::String(left), Value::String(right)) => {
+                Ok(left.gt(right))  
+            },
+            (Value::Float(left), Value::Float(right)) => {
+                Ok(left.gt(right))  
+            },
+            _ => {
+                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+            }
+        }
+    }
+
+    /* This is horrible */
+    pub fn lt(&self, right_op: &Value) -> Result<bool, ConditionErr> {
+        match (self, right_op) {
+            (Value::Bool(left), Value::Bool(right)) => {
+                Ok(left.lt(right))
+            },
+            (Value::Int(left), Value::Int(right)) => {
+                Ok(left.lt(right))  
+            },
+            (Value::String(left), Value::String(right)) => {
+                Ok(left.lt(right))  
+            },
+            (Value::Float(left), Value::Float(right)) => {
+                Ok(left.lt(right))  
+            },
+            _ => {
+                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+            }
+        }
+    }
+
+    /* This is horrible */
+    pub fn ge(&self, right_op: &Value) -> Result<bool, ConditionErr> {
+        match (self, right_op) {
+            (Value::Bool(left), Value::Bool(right)) => {
+                Ok(left.ge(right))
+            },
+            (Value::Int(left), Value::Int(right)) => {
+                Ok(left.ge(right))  
+            },
+            (Value::String(left), Value::String(right)) => {
+                Ok(left.ge(right))  
+            },
+            (Value::Float(left), Value::Float(right)) => {
+                Ok(left.ge(right))  
+            },
+            _ => {
+                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+            }
+        }
+    }
+
+    /* This is horrible */
+    pub fn le(&self, right_op: &Value) -> Result<bool, ConditionErr> {
+        match (self, right_op) {
+            (Value::Bool(left), Value::Bool(right)) => {
+                Ok(left.le(right))
+            },
+            (Value::Int(left), Value::Int(right)) => {
+                Ok(left.le(right))  
+            },
+            (Value::String(left), Value::String(right)) => {
+                Ok(left.le(right))  
+            },
+            (Value::Float(left), Value::Float(right)) => {
+                Ok(left.le(right))  
+            },
+            _ => {
+                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -129,15 +234,36 @@ pub struct Record {
 }
 
 impl Record {
-    fn filter(&self, fields: &Vec<String>) -> Result<Vec<&Value>, RecordErr> {
-        fields
+    fn passes_conditions(&self, conditions: &HashMap<String, Condition>) -> Result<bool, RecordErr> {
+        Ok(
+            conditions
+                .iter()
+                .map(|(field, cond)| {
+                    let val = self.fields.get(field).ok_or_else(|| RecordErr::InvalidField(field.to_string()))?;
+                    cond.holds_for(val).or_else(| err| Err(RecordErr::Condition(err)))
+                })
+                .collect::<Result<Vec<bool>, RecordErr>>()?
+                .iter()
+                .all(|b| *b)
+        )
+    }
+
+    fn filter(&self, fields: &Vec<String>, conditions: &HashMap<String, Condition>) -> Result<Option<Vec<&Value>>, RecordErr> {
+        if !self.passes_conditions(conditions)? {
+            return Ok(None);
+        }
+        
+        let vec = 
+            fields
             .iter()
             .map(|field| 
                 self.fields
                     .get(field)
                     .ok_or_else(|| RecordErr::InvalidField(field.clone()))
             )
-            .collect::<Result<Vec<&Value>, RecordErr>>() // Woooow ale potężny collect. Najpotężniejszy collect
+            .collect::<Result<Vec<&Value>, RecordErr>>()?; // Woooow ale potężny collect. Najpotężniejszy collect
+        
+        Ok(Some(vec))
     }
 
     pub fn from_map(map: HashMap<String, Value>) -> Self {
@@ -150,6 +276,42 @@ impl Record {
     }
 }
 
+
+/* Operator */
+
+pub enum Condition {
+    Equals(Value),
+    NotEquals(Value),
+    LessThan(Value),
+    LessEqual(Value),
+    Greater(Value),
+    GreaterEqual(Value),
+}
+
+impl Condition {
+    pub fn holds_for(&self, left_operand: &Value) -> Result<bool, ConditionErr> {
+        match self {
+            Condition::Equals(right) => {
+                left_operand.eq(right)
+            },
+            Condition::NotEquals(right) => {
+                left_operand.eq(right).map(|b| !b)
+            },
+            Condition::LessThan(right) => {
+                left_operand.le(right)
+            },
+            Condition::LessEqual(right) => {
+                left_operand.le(right)
+            },
+            Condition::Greater(right) => {
+                left_operand.gt(right)
+            },
+            Condition::GreaterEqual(right) => {
+                left_operand.ge(right)
+            },
+        }
+    }
+}
 
 /* === Table === */
 
@@ -176,7 +338,14 @@ impl<K: DatabaseKey> Table<K> {
         &self.name
     }
 
+    pub fn get_field_type(&self, field: &str) -> Result<&FieldType, DbErr> {
+        Ok(self.schema.fields.get(field).ok_or_else(|| InsertErr::InvalidField { table: self.name.clone(), field: field.to_string() })?)
+    }
+
     pub fn insert(&mut self, key: &K, record: Record) -> Result<(), DbErr> {
+        if self.records.contains_key(key) {
+            return Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?;
+        }
         match self.records.insert(key.clone(), record) {
             Some(_) => {
                 return Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?;
@@ -203,13 +372,19 @@ impl<K: DatabaseKey> Table<K> {
             .join(", ")
     }
 
-    pub fn select(&mut self, fields: &Vec<String>) -> Result<String, DbErr> {
+    pub fn select(&mut self, fields: &Vec<String>, conditions: &HashMap<String, Condition>) -> Result<String, DbErr> {
+        fields
+            .iter()
+            .find(|field| self.schema.fields.get(*field).is_none())
+            .map_or_else(|| Ok(()), |bad_field| Err(SelectErr::InvalidField { table: self.name.clone(), field: bad_field.clone() }))?;
+
         Ok (
             self.records
                 .iter()
-                .map(|(_, record)| record.filter(fields))
-                .collect::<Result<Vec<Vec<&Value>>, RecordErr>>()?
+                .map(|(_, record)| record.filter(fields, conditions))
+                .collect::<Result<Vec<Option<Vec<&Value>>>, RecordErr>>()?
                 .iter()
+                .flatten()
                 .map(|record_vec| Self::map_value_vec(record_vec, fields))
                 .collect::<Vec<String>>()
                 .join("\n")

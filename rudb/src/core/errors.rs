@@ -51,7 +51,9 @@ pub enum SelectErr {
     #[error("Field '{field}' not found in table '{table}'")]
     InvalidField { table: String, field: String },
     #[error(transparent)]
-    Record(#[from] RecordErr)
+    Record(#[from] RecordErr),
+    #[error(transparent)]
+    Condition(#[from] ConditionErr)
 }
 
 pub type DbResult<T> = std::result::Result<T, DbErr>;
@@ -61,4 +63,12 @@ pub type DbResult<T> = std::result::Result<T, DbErr>;
 pub enum RecordErr {
     #[error("Field '{0}' is inalid")]
     InvalidField(String),
+    #[error(transparent)]
+    Condition(#[from] ConditionErr)
+}
+
+#[derive(Error, Debug)]
+pub enum ConditionErr {
+    #[error("Mismatched operand types: left: '{left}', right: '{right}'")]
+    MismatchedOperandTypes { left: String, right: String },
 }
