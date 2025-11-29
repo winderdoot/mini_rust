@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cell::{Cell, LazyCell, OnceCell}, collections::VecDeque, ops::{Deref, DerefMut}, path::{PathBuf}, rc::Rc};
+use std::{borrow::Cow, cell::{Cell, LazyCell, OnceCell, RefCell}, collections::VecDeque, ops::{Deref, DerefMut}, path::PathBuf, rc::{Rc, Weak}};
 
 fn main() {
     let hans = AustroHungarianGreeter { counter: Cell::new(0) };
@@ -27,6 +27,15 @@ fn main() {
     let c1 = CachedFile::new();
     println!("Cached:\n{}", c1.get(&PathBuf::from("data.txt")));
 
+
+    let n = 10;
+    let mut node = Vertex::cycle(n);
+
+    for _ in 0..n {
+        println!("node: {}", node.borrow().data);
+        let next = node.borrow().all_neighbours().first().unwrap().upgrade().unwrap();
+        node = next;
+    }
 
 }   
 
@@ -107,6 +116,13 @@ pub struct CachedFile {
     cache: OnceCell<String>
 }
 
+/* Żeby się clippy nie pruł  */
+impl Default for CachedFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CachedFile {
     pub fn new() -> Self {
         Self { cache: OnceCell::new() }
@@ -128,7 +144,6 @@ impl CachedFile {
             .map(|s| s.as_str())
     }
 }
-
 
 // 6
 
@@ -152,7 +167,69 @@ impl SharedFile {
     }
 }
 
+// 7
 
+pub struct Vertex {
+    pub out_edges_owned: Vec<Rc<RefCell<Vertex>>>,
+    pub out_edges: Vec<Weak<RefCell<Vertex>>>,
+    pub data: i32,
+
+}
+
+impl Default for Vertex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Vertex {
+    pub fn new() -> Self {
+        Self {
+            data: 0,
+            out_edges: Vec::new(),
+            out_edges_owned: Vec::new()
+        }
+    }
+
+    pub fn create_neighbour(&mut self) -> Rc<RefCell<Vertex>> {
+        let neighbour = Rc::new(RefCell::new(Vertex::new()));
+        self.out_edges_owned.push(neighbour.clone());
+        neighbour
+    }
+
+    pub fn link_to(&mut self, other: Rc<RefCell<Vertex>>) {
+        self.out_edges.push(Rc::downgrade(&other))
+    }
+
+    pub fn all_neighbours(&self) -> Vec<Weak<RefCell<Vertex>>> {
+        self.out_edges
+            .iter()
+            .chain(
+                self.out_edges_owned
+                    .iter()
+                    .map(Rc::downgrade)
+                    .collect::<Vec<Weak<RefCell<Vertex>>>>()
+                    .iter()
+            )
+            .cloned()
+            .collect::<Vec<Weak<RefCell<Vertex>>>>()
+    }
+
+    pub fn cycle(n: usize) -> Rc<RefCell<Vertex>> {
+        let first = Rc::new(RefCell::new(Self::new()));
+        let mut last = first.clone();
+        let mut neighbour;
+
+        for i in 1..n {
+            neighbour = last.borrow_mut().create_neighbour();
+            neighbour.borrow_mut().data = i as i32;
+            last = neighbour;
+        }
+        last.borrow_mut().link_to(first.clone());
+
+        first
+    }
+}
 
 
 
