@@ -1,3 +1,5 @@
+use std::io::Error;
+
 use thiserror::Error;
 use crate::{cli::commands::AnyCommand, database::DatabaseKey, errors::DbErr};
 
@@ -29,6 +31,8 @@ pub enum ParseErr {
     MissingPrimaryKey(String),
     #[error("Unknown operator '{0}'")]
     UnknownOperator(String),
+    #[error(transparent)]
+    IO(#[from] Error),
     #[error("Unreachable error 🥶")]
     Unreachable,
     #[error(transparent)]

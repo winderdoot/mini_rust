@@ -12,6 +12,11 @@ pub enum DbErr {
     Select(#[from] SelectErr),
     #[error(transparent)]
     Record(#[from] RecordErr),
+    #[error(transparent)]
+    IO(#[from] std::io::Error),
+    /* It's dumb that I'm allowing this, but this has to be here due to how I implement ReadFrom */
+    #[error("Parsing error: {0}")]
+    Parse(String), 
     #[error("Unreachable error 🦀")]
     Unreachable,
 }

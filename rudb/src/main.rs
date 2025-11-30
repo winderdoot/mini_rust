@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use rudb::{cli::commands::{AnyCommand, Command, token_stream}, database::{AnyDatabase, Database, DatabaseKey}};
+use rudb::{cli::{commands::{AnyCommand, Command}, tokens::token_stream}, database::{AnyDatabase, Database, DatabaseKey}};
 use std::{io::{self, Error}, str::SplitWhitespace};
 
 /// CLI interface for an in-memory rust database program
@@ -20,13 +20,13 @@ enum KeyType {
 
 /* Commands  */
 
-fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>) {
+fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>, history: &mut Vec<String>) {
     let mut tokens = token_stream::<SplitWhitespace>(input);
     // println!("tokens:\n{:#?}", tokens.collect::<Vec<_>>());
 
     match AnyCommand::parse_from(&mut tokens, database).as_mut() {
         Ok(command) => {
-            match command.exec() {
+            match command.exec(history) {
                 Ok(output) => println!("{output}"),
                 Err(err) => println!("Database error: {err}"),
             }
@@ -35,11 +35,12 @@ fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>) {
     }
 }
 
-fn handle_line(line: &str, database: &mut AnyDatabase) {
+fn handle_line(line: &str, database: &mut AnyDatabase, history: &mut Vec<String>) {
     match database {
-        AnyDatabase::StringDatabase(database) => handle_db(line, database),
-        AnyDatabase::IntDatabase(database) => handle_db(line, database),
+        AnyDatabase::StringDatabase(database) => handle_db(line, database, history),
+        AnyDatabase::IntDatabase(database) => handle_db(line, database, history),
     }
+    history.push(line.to_string());
 }
 
 
@@ -51,8 +52,10 @@ fn main() {
         KeyType::String => AnyDatabase::StringDatabase(Database::<String>::new()),
     };
 
+    let mut history = Vec::<String>::new();
+
     io::stdin()
         .lines()
         .map_while(Result::ok)
-        .for_each(|l| handle_line(&l, &mut database));
+        .for_each(|l| handle_line(&l, &mut database, &mut history));
 }

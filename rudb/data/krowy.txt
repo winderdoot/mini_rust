@@ -1,0 +1,7 @@
+CREATE krowy KEY id FIELDS id: int, name: String, weight: float, age: int
+INSERT id=0, name="Mućka", weight=155.0, age=1 INTO krowy
+INSERT id=1, name="Bućka", weight=350.0, age=11 INTO krowy
+INSERT id=2, name="Puplet", weight=2137.0, age=5 INTO krowy
+INSERT id=3, name="Rudka", weight=412.0, age=7 INTO krowy
+INSERT id=5, name="Kropka", weight=339.0, age=7 INTO krowy
+INSERT id=6, name="Stokrotka", weight=397.0, age=3 INTO krowy

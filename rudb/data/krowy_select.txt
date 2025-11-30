@@ -1,0 +1,2 @@
+READ_FROM data/krowy.txt
+SELECT id,name,weight FROM krowy where weight<370
