@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use rudb::{cli::{commands::{AnyCommand, Command}, tokens::token_stream}, database::{AnyDatabase, Database, DatabaseKey}};
-use std::{io::{self, Error}, str::SplitWhitespace};
+use std::{io::{self}, str::SplitWhitespace};
 
 /// CLI interface for an in-memory rust database program
 #[derive(Parser, Debug)]
@@ -20,7 +20,7 @@ enum KeyType {
 
 /* Commands  */
 
-fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>, history: &mut Vec<String>) {
+fn handle_db<K: DatabaseKey>(input: &str, database: &mut Database<K>, history: &[String]) {
     let mut tokens = token_stream::<SplitWhitespace>(input);
     // println!("tokens:\n{:#?}", tokens.collect::<Vec<_>>());
 

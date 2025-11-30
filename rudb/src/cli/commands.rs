@@ -20,17 +20,15 @@ impl FieldType {
 
 impl Value {
     fn parse_bool(string: &str) -> Result<Self, ParseErr> {
-        Ok(
+        string
+        .eq_ignore_ascii_case("true")
+        .then_some(Value::Bool(true))
+        .or_else(|| 
             string
-            .eq_ignore_ascii_case("true")
-            .then(|| Value::Bool(true))
-            .or_else(|| 
-                string
-                    .eq_ignore_ascii_case("false")
-                    .then(|| Value::Bool(false))
-            )
-            .ok_or_else(|| ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Bool.to_string() })?
+                .eq_ignore_ascii_case("false")
+                .then_some(Value::Bool(false))
         )
+        .ok_or_else(|| ParseErr::InvalidLiteral { literal: string.to_string(), typ: FieldType::Bool.to_string() })
     }
 
     // At this point I had no energy left to use method chaining
@@ -73,7 +71,7 @@ impl Value {
 }
 
 impl Record {
-    fn parse_from<K: DatabaseKey>(map: &HashMap<String, String>, schema: &Schema, table: &str) -> Result<Self, ParseErr> {
+    fn parse_from(map: &HashMap<String, String>, schema: &Schema, table: &str) -> Result<Self, ParseErr> {
         map
             .keys()
             .find(|field| !schema.get_fields().contains_key(*field))
@@ -85,7 +83,7 @@ impl Record {
             .map_or_else(|| Ok(()), |field| Err(ParseErr::MissingField { field: field.clone(), table: table.to_string() }))?;
         let mut record_map: HashMap<String, Value> = HashMap::new();
         for (field, val_str) in map {
-            let field_type = schema.get_fields().get(field).ok_or_else(|| ParseErr::Unreachable)?;
+            let field_type = schema.get_fields().get(field).ok_or(ParseErr::Unreachable)?;
             let parsed_val = Value::parse_from(val_str, field_type)?;
             record_map.insert(field.to_string(), parsed_val);
         }
@@ -132,7 +130,7 @@ where
     K: DatabaseKey
 {
     /// Execute command on a database. The output is printed to stdout.
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr>;
+    fn exec(&mut self, history: &[String]) -> Result<String, DbErr>;
 
     /// Parse command from a token iterator and a database
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
@@ -143,8 +141,8 @@ where
 
 /* Create  */
 
-const FIELD_NAME_CHARSET: &'static str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
-const COND_OPERATORS: &[&'static str] = &["=", ">", "<", "!=", "<=", ">="];
+const FIELD_NAME_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+const COND_OPERATORS: &[&str] = &["=", ">", "<", "!=", "<=", ">="];
 
 pub struct Create<'a, K: DatabaseKey> {
     database: &'a mut Database<K>,
@@ -153,7 +151,7 @@ pub struct Create<'a, K: DatabaseKey> {
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, _history: &[String]) -> Result<String, DbErr> {
         self.database.add_table(&self.table, &self.schema)?;
         Ok(format!("Successfuly created '{}'.", self.table))
     }
@@ -173,9 +171,8 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
             let mut comma = false;
             let field_type = FieldType::parse_from(token_maybe_separator(tokens, "<FIELD_TYPE>", ",", &mut comma)?)?;
             
-            match schema_map.insert(field_name.to_string(), field_type) {
-                Some(_) => return Err(ParseErr::FieldExists(field_name.to_string())),
-                None => {},
+            if schema_map.insert(field_name.to_string(), field_type).is_some() {
+                return Err(ParseErr::FieldExists(field_name.to_string()));
             }
             if comma {
                 continue;
@@ -199,9 +196,9 @@ pub struct Insert<'a, K: DatabaseKey> {
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, _history: &[String]) -> Result<String, DbErr> {
         self.table.insert(&self.key.clone(), self.record.clone())?;
-        Ok(format!("Successfuly inserted."))
+        Ok(String::from("Successfuly inserted."))
     }
 
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
@@ -214,9 +211,8 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
             let mut comma = false;
             let field_val = token_maybe_separator(tokens, "<FIELD_VALUE>", ",", &mut comma)?;
             
-            match field_map.insert(field_name.to_string(), field_val.to_string()) {
-                Some(_) => return Err(ParseErr::FieldExists(field_name.to_string())),
-                None => {},
+            if field_map.insert(field_name.to_string(), field_val.to_string()).is_some() {
+                return Err(ParseErr::FieldExists(field_name.to_string()));
             }
             if !comma {
                 break;
@@ -224,8 +220,8 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
         }
         expect_token(tokens, "<FIELD_VALUE>", "INTO")?;
         let table = database.get_table_mut(next_token(tokens, "INTO", "<TABLE_NAME>")?)?;
-        let record = Record::parse_from::<K>(&field_map, table.get_schema(), table.get_name())?;
-        let key = record.get_key::<K>(table.get_schema()).ok_or_else(|| ParseErr::Unreachable)?;
+        let record = Record::parse_from(&field_map, table.get_schema(), table.get_name())?;
+        let key = record.get_key::<K>(table.get_schema()).ok_or(ParseErr::Unreachable)?;
 
         Ok( AnyCommand::Insert(Insert::<'a, K> { table, key, record }))
     }
@@ -240,9 +236,9 @@ pub struct Delete<'a, K: DatabaseKey> {
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Delete<'a, K> {
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, _history: &[String]) -> Result<String, DbErr> {
         self.table.delete(&self.key)?;
-        Ok(format!("Successfuly deleted."))
+        Ok(String::from("Successfuly deleted."))
     }
 
     fn parse_from<'b, I>(tokens: &mut Peekable<I>, database: &'a mut Database<K>) -> ParseResult<'a, K>
@@ -258,10 +254,10 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Delete<'a, K> {
                 table
                     .get_schema()
                     .get_key_type()
-                    .ok_or_else(|| ParseErr::Unreachable)?
+                    .ok_or(ParseErr::Unreachable)?
             )?
         )
-        .ok_or_else(|| ParseErr::Unreachable)?;
+        .ok_or(ParseErr::Unreachable)?;
     
         Ok(AnyCommand::Delete(Delete::<'a, K> { table, key }))
     }
@@ -296,9 +292,8 @@ impl<'a, K: DatabaseKey> Select<'a, K> {
             let field_val = Value::parse_from(token_maybe_separator(tokens, "<FIELD_VALUE>", ",", &mut comma)?, field_type)?;
             let condition = Condition::parse_from(found_sep, field_val)?;
             
-            match condidtions.insert(field_name.to_string(), condition) {
-                Some(_) => return Err(ParseErr::FieldExists(field_name.to_string())),
-                None => {},
+            if condidtions.insert(field_name.to_string(), condition).is_some() {
+                return Err(ParseErr::FieldExists(field_name.to_string()));
             }
             if !comma {
                 break;
@@ -310,7 +305,7 @@ impl<'a, K: DatabaseKey> Select<'a, K> {
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, _history: &[String]) -> Result<String, DbErr> {
         self.table.select(&self.fields, &self.conditions)
     }
 
@@ -348,7 +343,7 @@ pub struct ReadFrom<'a, K: DatabaseKey> {
 impl<'a, K: DatabaseKey> Command<'a, K> for ReadFrom<'a, K> {
     /* For lifetime reasons, commands have to be executed as they are parsed and this causes an issue where if a later command
      * fails to parse then we don't get result from the previous commands */
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, history: &[String]) -> Result<String, DbErr> {
         let mut command_results = Vec::<String>::new();
 
         for line in &self.lines {
@@ -395,7 +390,7 @@ pub struct SaveAs {
 impl<'a, K: DatabaseKey> Command<'a, K> for SaveAs {
     /* For lifetime reasons, commands have to be executed as they are parsed and this causes an issue where if a later command
      * fails to parse then we don't get result from the previous commands */
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, history: &[String]) -> Result<String, DbErr> {
         std::fs::write(&self.file, history.join("\n").as_bytes())?;
 
         Ok(format!("Successfuly saved history to {}", self.file))
@@ -463,7 +458,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
         }
     }
     
-    fn exec(&mut self, history: &Vec<String>) -> Result<String, DbErr> {
+    fn exec(&mut self, history: &[String]) -> Result<String, DbErr> {
         match self {
             AnyCommand::Create(create) => create.exec(history),
             AnyCommand::Insert(insert) => insert.exec(history),

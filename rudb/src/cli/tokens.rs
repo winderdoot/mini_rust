@@ -30,7 +30,7 @@ pub fn split_and_keep<'a>(text: &'a str, sep: &'a str, skip: bool) -> Vec<(&'a s
         parts.push((&text[last_end..], false));
     }
 
-    parts.into_iter().filter(|(s, skip)| !s.is_empty()).collect()
+    parts.into_iter().filter(|(s, _)| !s.is_empty()).collect()
 }
 
 pub fn token_stream<'a, I: Iterator<Item = &'a str>>(string: &'a str) -> Peekable<impl Iterator<Item = &'a str>> 
@@ -111,17 +111,17 @@ where
     iter
         .next()
         .ok_or(ParseErr::ExpectedToken(expect.to_string()))
-        .and_then(|tok| {
+        .map(|tok| {
             if tok.ends_with(sep) {
                 *found_sep = true;
-                return Ok(tok.trim_end_matches(sep));
+                return tok.trim_end_matches(sep);
             }
             if iter.peek().is_some_and(|next| *next == sep) {
                 iter.next();
                 *found_sep = true;
-                return Ok(tok);
+                return tok
             }
-            Ok(tok)
+            tok
         })
 }
 
@@ -130,26 +130,23 @@ pub fn token_any_separator<'a, I>(iter: &mut Peekable<I>, expect: &str, separato
 where
     I: Iterator<Item = &'a str>
 {
-    Ok(
-        iter
-        .next()
-        .ok_or(ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))
-        .map(|tok| {
-            let sep = *separators
-            .iter()
-            .find(|sep| {
-                iter
-                    .peek()
-                    .is_some_and(|next| *next == **sep)
-            })
-            .ok_or_else(|| ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))?;
-            *found_sep = sep;
-            iter.next(); // Consume the separator
-            
-            Ok(tok)
+    iter
+    .next()
+    .ok_or(ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))
+    .and_then(|tok| {
+        let sep = *separators
+        .iter()
+        .find(|sep| {
+            iter
+                .peek()
+                .is_some_and(|next| *next == **sep)
         })
-        .flatten()?
-    )
+        .ok_or_else(|| ParseErr::ExpectedToken(format!("{expect}[{}]", separators.join(", "))))?;
+        *found_sep = sep;
+        iter.next(); // Consume the separator
+        
+        Ok(tok)
+    })
 }
 
 pub fn expect_empty<'a, I>(iter: &mut Peekable<I>, expect: &str) -> Result<(), ParseErr>
@@ -170,10 +167,10 @@ where
         Some(tok) => {
             *empty = false;
             if tok.eq_ignore_ascii_case(expect) {
-                return Ok(iter.next());
+                Ok(iter.next())
             }
             else {
-                return Err(ParseErr::MissingToken { prev: prev.to_string(), missing: expect.to_string() });
+                Err(ParseErr::MissingToken { prev: prev.to_string(), missing: expect.to_string() })
             }
         },
         None => {

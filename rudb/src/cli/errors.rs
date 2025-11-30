@@ -1,7 +1,7 @@
 use std::io::Error;
 
 use thiserror::Error;
-use crate::{cli::commands::AnyCommand, database::DatabaseKey, errors::DbErr};
+use crate::{cli::commands::AnyCommand, errors::DbErr};
 
 #[derive(Error, Debug)]
 pub enum ParseErr {
@@ -39,4 +39,4 @@ pub enum ParseErr {
     Database(#[from] DbErr)
 }
 
-pub type ParseResult<'a, K: DatabaseKey> = Result<AnyCommand<'a, K>, ParseErr>;
+pub type ParseResult<'a, K> = Result<AnyCommand<'a, K>, ParseErr>;
