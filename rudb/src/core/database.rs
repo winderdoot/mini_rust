@@ -53,6 +53,9 @@ pub enum FieldType {
     Float
 }
 
+/* I need this for easier FieldType parsing. Calling to_string() is more convenient
+ * than using something like format!("{}", field_type)  */
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for FieldType {
     fn to_string(&self) -> String {
         match self {
@@ -240,7 +243,7 @@ impl Record {
                 .iter()
                 .map(|(field, cond)| {
                     let val = self.fields.get(field).ok_or_else(|| RecordErr::InvalidField(field.to_string()))?;
-                    cond.holds_for(val).or_else(| err| Err(RecordErr::Condition(err)))
+                    cond.holds_for(val).map_err(RecordErr::Condition)
                 })
                 .collect::<Result<Vec<bool>, RecordErr>>()?
                 .iter()
@@ -248,7 +251,7 @@ impl Record {
         )
     }
 
-    fn filter(&self, fields: &Vec<String>, conditions: &HashMap<String, Condition>) -> Result<Option<Vec<&Value>>, RecordErr> {
+    fn filter(&self, fields: &[String], conditions: &HashMap<String, Condition>) -> Result<Option<Vec<&Value>>, RecordErr> {
         if !self.passes_conditions(conditions)? {
             return Ok(None);
         }
@@ -348,10 +351,10 @@ impl<K: DatabaseKey> Table<K> {
         }
         match self.records.insert(key.clone(), record) {
             Some(_) => {
-                return Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?;
+                Err(InsertErr::KeyUsed { table: self.name.to_string(), key: key.to_string() })?
             },
             None => {
-                return Ok(())
+                Ok(())
             },
         }
     }
@@ -363,7 +366,7 @@ impl<K: DatabaseKey> Table<K> {
         Ok(())   
     }
 
-    fn map_value_vec(record_vec: &Vec<&Value>, fields: &Vec<String>) -> String {
+    fn map_value_vec(record_vec: &Vec<&Value>, fields: &[String]) -> String {
         record_vec
             .iter()
             .enumerate()
@@ -372,16 +375,16 @@ impl<K: DatabaseKey> Table<K> {
             .join(", ")
     }
 
-    pub fn select(&mut self, fields: &Vec<String>, conditions: &HashMap<String, Condition>) -> Result<String, DbErr> {
+    pub fn select(&mut self, fields: &[String], conditions: &HashMap<String, Condition>) -> Result<String, DbErr> {
         fields
             .iter()
-            .find(|field| self.schema.fields.get(*field).is_none())
+            .find(|field| !self.schema.fields.contains_key(*field))
             .map_or_else(|| Ok(()), |bad_field| Err(SelectErr::InvalidField { table: self.name.clone(), field: bad_field.clone() }))?;
 
         Ok (
             self.records
-                .iter()
-                .map(|(_, record)| record.filter(fields, conditions))
+                .values()
+                .map(|record| record.filter(fields, conditions))
                 .collect::<Result<Vec<Option<Vec<&Value>>>, RecordErr>>()?
                 .iter()
                 .flatten()
@@ -398,6 +401,12 @@ impl<K: DatabaseKey> Table<K> {
 
 pub struct Database<K: DatabaseKey> {
     tables: HashMap<String, Table<K>>,
+}
+
+impl<K: DatabaseKey> Default for Database<K> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<K: DatabaseKey> Database<K> {
@@ -417,7 +426,7 @@ impl<K: DatabaseKey> Database<K> {
         }
         let schema_key = schema
             .get_key_type()
-            .ok_or_else(|| DbErr::Unreachable)?;
+            .ok_or(DbErr::Unreachable)?;
         schema_key
             .ne(&K::get_type())
             .then_some(())
