@@ -14,10 +14,15 @@ I was trying to do this quickly and didn't expect that using a library like pest
 I swear I will never write a parser like this by hand ever again, it was a waste of time. And it isn't even that good either, 
 as each command needs to be in a single line and string literals can't have spaces.
 
+## Documentation
+
+None
+
 ## Implemented modules
 
 None as I didn't have time and I need to move on to other projects 😢
 
 ## Favourite module
 
-My favourite module was studying for TAJF
+My favourite module was studying for TAJF.
+Update: I think I did ok??
