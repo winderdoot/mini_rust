@@ -1,12 +1,12 @@
-use std::{collections::{BTreeMap, HashMap}, fmt::Display};
+use std::{collections::{BTreeMap, HashMap}, fmt::{Debug, Display}};
 use crate::{core::errors::*};
 
 
 /* === DatabaseKey === */
 
-pub trait DatabaseKey
+pub trait DatabaseKey: Debug
 where 
-Self: Sized + ToString + Clone + Ord + PartialEq {
+Self: Sized + ToString + Clone + Ord + PartialEq + Display {
     fn get_type() -> FieldType;
     fn from_value(val: &Value) -> Option<Self>;
 }
@@ -37,15 +37,11 @@ impl DatabaseKey for String {
     }
 }
 
-// pub enum AnyDbKey {
-//     Int(i64),
-//     String(String)
-// }
 
 
 /* === Schema ===  */
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum FieldType {
     Bool,
     String,
@@ -69,7 +65,7 @@ impl ToString for FieldType {
 
 
 /// Contains the column names and types of a table, including the primary key
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Schema {
     fields: HashMap<String, FieldType>,
     key: String
@@ -96,7 +92,7 @@ impl Schema {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Bool(bool),
     String(String),
@@ -190,22 +186,22 @@ impl Value {
 
     /* This is horrible */
     pub fn ge(&self, right_op: &Value) -> Result<bool, ConditionErr> {
-        match (self, right_op) {
-            (Value::Bool(left), Value::Bool(right)) => {
-                Ok(left.ge(right))
-            },
-            (Value::Int(left), Value::Int(right)) => {
-                Ok(left.ge(right))  
-            },
-            (Value::String(left), Value::String(right)) => {
-                Ok(left.ge(right))  
-            },
-            (Value::Float(left), Value::Float(right)) => {
-                Ok(left.ge(right))  
-            },
-            _ => {
-                Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
-            }
+            match (self, right_op) {
+                (Value::Bool(left), Value::Bool(right)) => {
+                    Ok(left.ge(right))
+                },
+                (Value::Int(left), Value::Int(right)) => {
+                    Ok(left.ge(right))  
+                },
+                (Value::String(left), Value::String(right)) => {
+                    Ok(left.ge(right))  
+                },
+                (Value::Float(left), Value::Float(right)) => {
+                    Ok(left.ge(right))  
+                },
+                _ => {
+                    Err(ConditionErr::MismatchedOperandTypes { left: self.get_type().to_string(), right: right_op.get_type().to_string() })
+                }
         }
     }
 
@@ -231,7 +227,7 @@ impl Value {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Record {
     fields: HashMap<String, Value>
 }
@@ -282,6 +278,7 @@ impl Record {
 
 /* Operator */
 
+#[derive(Debug)]
 pub enum Condition {
     Equals(Value),
     NotEquals(Value),
@@ -318,6 +315,7 @@ impl Condition {
 
 /* === Table === */
 
+#[derive(Debug)]
 pub struct Table<K: DatabaseKey> {
     name: String,
     schema: Schema,
@@ -399,6 +397,7 @@ impl<K: DatabaseKey> Table<K> {
 
 /* === Database === */
 
+#[derive(Debug)]
 pub struct Database<K: DatabaseKey> {
     tables: HashMap<String, Table<K>>,
 }
@@ -453,6 +452,114 @@ impl AnyDatabase {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assert_matches::assert_matches;
+
+    #[test]
+    fn test_value_enum_comparison() {
+        let int_a = Value::Int(10);
+        let int_b = Value::Int(5);
+        let str_val = Value::String("I hate c++".to_string());
+
+        assert_eq!(int_a.gt(&int_b).unwrap(), true);
+        
+        assert_eq!(int_b.lt(&int_a).unwrap(), true);
+
+        assert_eq!(int_a.eq(&int_a).unwrap(), true);
+        assert_eq!(int_a.eq(&int_b).unwrap(), false);
+
+        let result = int_a.eq(&str_val);
+        assert_matches!(result, Err(ConditionErr::MismatchedOperandTypes { .. }));
+    }
+
+    #[test]
+    fn test_schema_validation() {
+        let mut fields = HashMap::new();
+        fields.insert("cow_name".to_string(), FieldType::String);
+        fields.insert("was_milked".to_string(), FieldType::Bool);
+
+        let schema_some = Schema::from_map(fields.clone(), "cow_name");
+        assert_matches!(schema_some, Some(_));
+        let s = schema_some.unwrap();
+        assert_eq!(s.get_key(), "cow_name");
+
+        let schema_none = Schema::from_map(fields, "definitely_not_cow_name");
+        assert_matches!(schema_none, None);
+    }
+
+    fn create_pope_schema() -> Schema {
+        let mut fields = HashMap::new();
+        fields.insert("id".to_string(), FieldType::Int);
+        fields.insert("name".to_string(), FieldType::String);
+        fields.insert("likes_kremówki".to_string(), FieldType::Bool);
+        Schema::from_map(fields, "id").unwrap()
+    }
+
+    #[test]
+    fn test_table_insert_unique() {
+        let schema = create_pope_schema();
+        let mut table = Table::<i64>::from_schema("Pope_table", &schema);
+
+        let mut r1_map = HashMap::new();
+        r1_map.insert("id".to_string(), Value::Int(1));
+        r1_map.insert("name".to_string(), Value::String("John Paul II".to_string()));
+        r1_map.insert("likes_kremówki".to_string(), Value::Bool(true));
+        let record1 = Record::from_map(r1_map);
+        let res1 = table.insert(&1, record1);
+
+        assert_matches!(res1, Ok(_));
+
+        let mut r2_map = HashMap::new();
+        r2_map.insert("id".to_string(), Value::Int(1));
+        r2_map.insert("name".to_string(), Value::String("Leon XIV".to_string()));
+        r2_map.insert("likes_kremówki".to_string(), Value::Bool(false));
+        let record2 = Record::from_map(r2_map);
+        let res2 = table.insert(&1, record2);
+
+        assert_matches!(res2, Err(DbErr::Insert(InsertErr::KeyUsed { .. })));
+    }
+
+    #[test]
+    fn test_select_where() {
+        let schema = create_pope_schema();
+        let mut table = Table::<i64>::from_schema("Pope_table", &schema);
+
+        let mut r1 = HashMap::new();
+        r1.insert("id".to_string(), Value::Int(1));
+        r1.insert("name".to_string(), Value::String("John Paul II".to_string()));
+        r1.insert("likes_kremówki".to_string(), Value::Bool(true));
+        table.insert(&1, Record::from_map(r1)).unwrap();
+
+        let mut r2 = HashMap::new();
+        r2.insert("id".to_string(), Value::Int(2));
+        r2.insert("name".to_string(), Value::String("Francis".to_string()));
+        r2.insert("likes_kremówki".to_string(), Value::Bool(false));
+        table.insert(&2, Record::from_map(r2)).unwrap();
+
+        let mut conditions = HashMap::new();
+        conditions.insert("likes_kremówki".to_string(), Condition::Equals(Value::Bool(true)));
+        
+        let result = table.select(&["name".to_string(), "likes_kremówki".to_string()], &conditions).unwrap();
+
+        assert_eq!(result, "name: \"John Paul II\", likes_kremówki: true");
+    }
+
+    #[test]
+    fn test_database_key_type_mismatch() {
+        let mut db = Database::<String>::new();
+
+        let mut fields = HashMap::new();
+        fields.insert("id".to_string(), FieldType::Int);
+        fields.insert("some_column_idk_what_to_name_it_really".to_string(), FieldType::String);
+        let bad_schema = Schema::from_map(fields, "id").unwrap();
+
+        let result = db.add_table("funny_table", &bad_schema);
+
+        assert_matches!(result, Err(DbErr::Insert(InsertErr::InvalidKeyType { .. })));
+    }
+}
 
 
 // Zyguła przyjmuje na inżynierki rustowe związane z interpreterami i kompilatorami

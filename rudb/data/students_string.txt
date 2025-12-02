@@ -1,0 +1,9 @@
+CREATE students KEY ID FIELDS id: int, first_name: string, last_name: string, age: int, passed: bool
+INSERT id="0", first_name="Robert", last_name="Treborowski", age= 21, passed=true INTO students
+INSERT id="1", first_name="Michał", last_name="Łachimowski", age= 2137, passed=false INTO students
+INSERT id="2", first_name="Magda", last_name="Adgamańska", age= 22, passed=true INTO students 
+INSERT id="3", first_name="Paweł", last_name="Łewapowski", age= 18, passed=false INTO students  
+INSERT id="4", first_name="Agata", last_name="Atagawska", age= 23, passed=false INTO students
+INSERT id="5", first_name="Szymon", last_name="Nomyszkowski", age= 19, passed=true INTO students
+DELETE "5" from students
+SELECT id, name, passed FROM students WHERE id>1, id<4

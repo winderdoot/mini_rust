@@ -1,0 +1,7 @@
+CREATE puppies KEY puppy_id FIELDS puppy_id: string, name: string, weight: float, male: bool
+INSERT puppy_id="1", name="Buster", weight=35.5, male=true INTO puppies
+INSERT puppy_id="2", name="Daisy", weight=22.0, male=false INTO puppies
+INSERT puppy_id="3", name="Chico", weight=6.8, male=true INTO puppies
+INSERT puppy_id="4", name="Giantess", weight=145.1, male=false INTO puppies
+INSERT puppy_id="5", name="Rocky", weight=55.9, male=true INTO puppies
+INSERT puppy_id="6", name="Missy_Sue", weight=18.7, male=false INTO puppies

@@ -144,6 +144,7 @@ where
 const FIELD_NAME_CHARSET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
 const COND_OPERATORS: &[&str] = &["=", ">", "<", "!=", "<=", ">="];
 
+#[derive(Debug)]
 pub struct Create<'a, K: DatabaseKey> {
     database: &'a mut Database<K>,
     table: String,
@@ -189,6 +190,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Create<'a, K> {
 
 /* Insert */
 
+#[derive(Debug)]
 pub struct Insert<'a, K: DatabaseKey> {
     table: &'a mut Table<K>,
     key: K,
@@ -230,6 +232,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Insert<'a, K> {
 
 /* Delete */
 
+#[derive(Debug)]
 pub struct Delete<'a, K: DatabaseKey> {
     table: &'a mut Table<K>,
     key: K
@@ -266,6 +269,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Delete<'a, K> {
 
 /* Select */
 
+#[derive(Debug)]
 pub struct Select<'a, K: DatabaseKey> {
     table: &'a mut Table<K>,
     fields: Vec<String>,
@@ -335,6 +339,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for Select<'a, K> {
 
 /* ReadFrom */
 
+#[derive(Debug)]
 pub struct ReadFrom<'a, K: DatabaseKey> {
     database: &'a mut Database<K>,
     lines: Vec<String>, /* Due to lifetimes, I can't store parsed commands here. */
@@ -342,7 +347,8 @@ pub struct ReadFrom<'a, K: DatabaseKey> {
 
 impl<'a, K: DatabaseKey> Command<'a, K> for ReadFrom<'a, K> {
     /* For lifetime reasons, commands have to be executed as they are parsed and this causes an issue where if a later command
-     * fails to parse then we don't get result from the previous commands */
+     * fails to parse then we don't get result from the previous commands.
+     * This is bad but whatever. */
     fn exec(&mut self, history: &[String]) -> Result<String, DbErr> {
         let mut command_results = Vec::<String>::new();
 
@@ -383,13 +389,15 @@ impl<'a, K: DatabaseKey> Command<'a, K> for ReadFrom<'a, K> {
 
 /* SaveAs */
 
+#[derive(Debug)]
 pub struct SaveAs {
     file: String, /* Due to lifetimes, I can't store parsed commands here. */
 }
 
 impl<'a, K: DatabaseKey> Command<'a, K> for SaveAs {
     /* For lifetime reasons, commands have to be executed as they are parsed and this causes an issue where if a later command
-     * fails to parse then we don't get result from the previous commands */
+     * fails to parse then we don't get result from the previous commands.
+     * This is bad but whatever. */
     fn exec(&mut self, history: &[String]) -> Result<String, DbErr> {
         std::fs::write(&self.file, history.join("\n").as_bytes())?;
 
@@ -416,6 +424,7 @@ impl<'a, K: DatabaseKey> Command<'a, K> for SaveAs {
 
 /* Enum */
 
+#[derive(Debug)]
 pub enum AnyCommand<'a, K: DatabaseKey> {
     Create(Create<'a, K>),
     Insert(Insert<'a, K>),
@@ -468,4 +477,268 @@ impl<'a, K: DatabaseKey> Command<'a, K> for AnyCommand<'a, K> {
             AnyCommand::SaveAs(save_as) => Command::<'_, K>::exec(save_as, history),
         }
     }
+}
+
+
+/* Tests */
+#[cfg(test)]
+mod test {
+    use assert_matches::assert_matches;
+
+    use super::*;
+
+    /* Testing mostly happy path because there's a milion and more errors that we could test for and I can't be bothered anymore */
+
+    #[test]
+    fn test_create_code_exec() {
+        let mut db = Database::<i64>::new();
+        let key_name = String::from("puppy_id");
+        let map = HashMap::<String, FieldType>::from(
+            [
+                (String::from("name"), FieldType::String),
+                (String::from("paw_count"), FieldType::Int),
+                (String::from("good_boy_meter"), FieldType::Float),
+                (String::from("puppy_id"), FieldType::Int)
+            ]
+        );
+        let schema = Schema::from_map(map, &key_name).unwrap();
+        let mut create = Create::<i64> { database: &mut db, table: String::from("puppies"), schema };
+        create.exec(&[]).unwrap();
+    }
+
+    #[test]
+    fn test_create_parse_exec() {
+        let mut db = Database::<String>::new();
+        let create_str = "CREATE puppies KEY puppy_id FIELDS name: String,paw_count:int, good_boy_meter  : float  , puppy_id: string";
+        let mut tokens = token_stream::<SplitWhitespace>(create_str);
+
+        let mut create = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(create, AnyCommand::Create(_));
+        create.exec(&[]).unwrap();
+    }
+
+    fn create_puppy_table<K: DatabaseKey>(db: &mut Database<K>) {
+        let create_str = format!("CREATE puppies KEY puppy_id FIELDS name: String,paw_count:int, good_boy_meter  : float  , puppy_id: {}", K::get_type().to_string());
+        let mut tokens = token_stream::<SplitWhitespace>(&create_str);
+
+        let mut create = AnyCommand::<K>::parse_from(&mut tokens, db).unwrap();
+        assert_matches!(create, AnyCommand::Create(_));
+        create.exec(&[]).unwrap();
+    }
+
+    #[test]
+    fn test_insert_code_exec() {
+        let mut db = Database::<i64>::new();
+        create_puppy_table(&mut db);
+
+        let table = db.get_table_mut("puppies").unwrap();
+        let map = HashMap::<String, Value>::from(
+            [
+                (String::from("name"), Value::String(String::from("Reksio"))),
+                (String::from("paw_count"), Value::Int(4)),
+                (String::from("good_boy_meter"), Value::Float(100000.0)),
+                (String::from("puppy_id"), Value::Int(0))
+            ]
+        );
+        let record = Record::from_map(map);
+        
+        let mut insert = Insert::<i64> { table, key: 0, record };
+        insert.exec(&[]).unwrap();
+    }
+
+    #[test]
+    fn test_insert_duplicate_code_exec_() {
+        let mut db = Database::<i64>::new();
+        create_puppy_table(&mut db);
+
+        let table = db.get_table_mut("puppies").unwrap();
+        let map = HashMap::<String, Value>::from(
+            [
+                (String::from("name"), Value::String(String::from("Reksio"))),
+                (String::from("paw_count"), Value::Int(4)),
+                (String::from("good_boy_meter"), Value::Float(100000.0)),
+                (String::from("puppy_id"), Value::Int(0))
+            ]
+        );
+        let record = Record::from_map(map);
+        
+        let mut insert = Insert::<i64> { table, key: 0, record };
+        insert.exec(&[]).unwrap();
+
+        let map = HashMap::<String, Value>::from(
+            [
+                (String::from("name"), Value::String(String::from("Schwebsio"))),
+                (String::from("good_boy_meter"), Value::Float(100000.0)),
+                (String::from("puppy_id"), Value::Int(0))
+            ]
+        );
+        let record = Record::from_map(map);
+        let mut insert = Insert::<i64> { table, key: 0, record };
+        insert.exec(&[]).unwrap_err();
+
+    }
+
+    #[test]
+    fn test_insert_parse_exec() {
+        let mut db = Database::<String>::new();
+        create_puppy_table(&mut db);
+
+        let s = "INSERT name=\"Azorek\",puppy_id=\"AZOREK_ID\",good_boy_meter = 2137.0 , paw_count= 4 INTO puppies";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+
+        let mut command = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::<String>::Insert(_));
+        command.exec(&[]).unwrap();
+    }
+
+    fn read_table_from<K: DatabaseKey>(file: &str, db: &mut Database<K>) {
+        let s = format!("READ_FROM {}", file);
+        let mut tokens = token_stream::<SplitWhitespace>(&s);
+        let mut command = AnyCommand::parse_from(&mut tokens, db).unwrap();
+        assert_matches!(command, AnyCommand::ReadFrom(_));
+        command.exec(&[]).unwrap();
+    }
+
+    #[test]
+    /* I don't want to manually create the table and then insert values, I use READ_FROM instead  */
+    fn test_select_code_exec() {
+        let mut db = Database::<i64>::new();
+        read_table_from("data/puppies_int.txt", &mut db);
+
+        let table = db.get_table_mut("puppies").unwrap();
+        let fields = Vec::<String>::from(
+            [
+                String::from("name"),
+                String::from("weight"),
+                String::from("male"),
+                String::from("puppy_id")
+            ]
+        );
+        
+        let mut command = Select::<i64> { table, fields, conditions: HashMap::new() };
+        let results = command.exec(&[]).unwrap();
+        assert_eq!(results, "name: \"Buster\", weight: 35.5, male: true, puppy_id: 1\nname: \"Daisy\", weight: 22, male: false, puppy_id: 2\nname: \"Chico\", weight: 6.8, male: true, puppy_id: 3\nname: \"Giantess\", weight: 145.1, male: false, puppy_id: 4\nname: \"Rocky\", weight: 55.9, male: true, puppy_id: 5\nname: \"Missy_Sue\", weight: 18.7, male: false, puppy_id: 6");
+    }
+
+    #[test]
+    fn test_select_parse_exec() {
+        let mut db = Database::<String>::new();
+        read_table_from("data/puppies_string.txt", &mut db);
+
+        let s = "SELECT male, puppy_id,weight ,   name FROM puppies";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+        
+        let mut command = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::Select(_));
+        let results = command.exec(&[]).unwrap();
+        assert_eq!(results, "male: true, puppy_id: \"1\", weight: 35.5, name: \"Buster\"\nmale: false, puppy_id: \"2\", weight: 22, name: \"Daisy\"\nmale: true, puppy_id: \"3\", weight: 6.8, name: \"Chico\"\nmale: false, puppy_id: \"4\", weight: 145.1, name: \"Giantess\"\nmale: true, puppy_id: \"5\", weight: 55.9, name: \"Rocky\"\nmale: false, puppy_id: \"6\", weight: 18.7, name: \"Missy_Sue\"");
+    }
+
+    #[test]
+    fn test_select_where_parse_exec() {
+        let mut db = Database::<i64>::new();
+        read_table_from("data/puppies_int.txt", &mut db);
+
+        let s = "SELECT puppy_id,male,name FROM puppies WHERE male=false, name !=\"Missy_Sue\" ";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+
+        let mut command = AnyCommand::<i64>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::Select(_));
+        let results = command.exec(&[]).unwrap();
+        assert_eq!(results, "puppy_id: 2, male: false, name: \"Daisy\"\npuppy_id: 4, male: false, name: \"Giantess\"");
+    }
+
+    #[test]
+    fn test_delete_code_exec() {
+        let mut db = Database::<i64>::new();
+        read_table_from("data/krowy.txt", &mut db);
+        let table = db.get_table_mut("krowy").unwrap();
+        let key = 1;
+
+        let mut command = Delete::<i64> { table, key };
+        let result = command.exec(&[]).unwrap();
+        assert_eq!(result, "Successfuly deleted.");
+    }
+
+    #[test]
+    fn test_delete_parse_exec() {
+        let mut db = Database::<String>::new();
+        read_table_from("data/puppies_string.txt", &mut db);
+
+        let s = "DELETE \"2\" from puppies";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+        let mut command = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::Delete(_));
+        let result = command.exec(&[]).unwrap();
+        assert_eq!(result, "Successfuly deleted.");
+    }
+
+    #[test]
+    fn test_read_from_code_exec() {
+        let mut db = Database::<i64>::new();
+
+        let lines = std::fs::read_to_string("data/krowy_select.txt").unwrap().split("\n").map(String::from).collect();
+        let mut command = ReadFrom::<i64> { database: &mut db, lines };
+        let results = command.exec(&[]).unwrap();
+        assert_eq!(results, "Successfuly created 'krowy'.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nid: 0, name: \"Mućka\", weight: 155\nid: 1, name: \"Bućka\", weight: 350\nid: 5, name: \"Kropka\", weight: 339");
+    }
+
+    #[test]
+    fn test_read_from_parse_exec() {
+        let mut db = Database::<String>::new();
+
+        let s = "READ_FROM data/puppies_string.txt";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+        let mut command = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        let results = command.exec(&[]).unwrap();
+        assert_eq!(results, "Successfuly created 'puppies'.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.\nSuccessfuly inserted.");
+    }
+
+    #[test]
+    fn test_save_as_code_exec() {
+        let orig_content = std::fs::read_to_string("data/students_int.txt").unwrap();
+        let history : Vec<String> = orig_content.split("\n").map(String::from).collect();
+
+        let mut command = SaveAs { file: "data/tmp.txt".to_string() };
+        let results = Command::<i64>::exec(&mut command, &history).unwrap();
+        assert_eq!(results, "Successfuly saved history to data/tmp.txt");
+        let tmp_file = std::fs::read_to_string("data/tmp.txt").unwrap();
+        assert_eq!(tmp_file, orig_content);
+        std::fs::remove_file("data/tmp.txt").unwrap();
+    }
+    
+    #[test]
+    fn test_save_as_parse_exec() {
+        let mut db = Database::<String>::new();
+        let orig_content = std::fs::read_to_string("data/students_string.txt").unwrap();
+        let history : Vec<String> = orig_content.split("\n").map(String::from).collect();
+        let tmp_file_name = "data/tmp1.txt";
+
+        let s = format!("SAVE_AS {}", tmp_file_name);
+        let mut tokens = token_stream::<SplitWhitespace>(&s);
+        let mut command = AnyCommand::<String>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::SaveAs(_));
+
+        let results = command.exec(&history).unwrap();
+        assert_eq!(results, format!("Successfuly saved history to {}", tmp_file_name));
+        let tmp_file = std::fs::read_to_string(tmp_file_name).unwrap();
+        assert_eq!(tmp_file, orig_content);
+        std::fs::remove_file(tmp_file_name).unwrap();
+    }
+
+    /* Negative test cases where whe check if something goes wrong */
+    #[test]
+    #[should_panic]
+    fn test_delete_invalid_key() {
+        let mut db = Database::<i64>::new();
+        read_table_from("data/puppies_int.txt", &mut db);
+
+        let s = "DELETE 2137 from puppies";
+        let mut tokens = token_stream::<SplitWhitespace>(s);
+
+        let mut command = AnyCommand::<i64>::parse_from(&mut tokens, &mut db).unwrap();
+        assert_matches!(command, AnyCommand::Delete(_));
+        command.exec(&[]).unwrap();
+    }
+
 }
