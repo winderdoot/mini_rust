@@ -29,7 +29,8 @@ fn main() {
 
 
     let n = 10;
-    let mut node = Vertex::cycle(n);
+    let first_node = Vertex::cycle(n);
+    let mut node = first_node.clone();
 
     for _ in 0..n {
         println!("node: {}", node.borrow().data);
