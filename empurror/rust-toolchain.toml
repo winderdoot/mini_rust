@@ -1,0 +1,4 @@
+# Enable nightly rust compiler
+[toolchain]
+channel = "nightly"
+
