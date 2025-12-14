@@ -9,8 +9,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .init_resource::<CameraSettings>()
-        .init_resource::<HexGridSettings>()
-        .add_systems(Startup, (setup_scene, spawn_camera, setup_grid))
+        .add_systems(Startup, (setup_scene, spawn_camera, setup_grid.after(load_hexgird_settings), load_hexgird_settings))
         .add_systems(Update, camera_system)
         .run();
 }

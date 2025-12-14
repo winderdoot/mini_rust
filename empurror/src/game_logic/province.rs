@@ -4,10 +4,12 @@ use bevy::ecs::system::RunSystemOnce;
 
 use crate::game_logic::empire::*;
 
+#[derive(Hash, Debug, PartialEq, std::cmp::Eq)]
 pub enum ProvinceType {
     Water,
     Plains,
-    Woods,   
+    Woods,
+    Desert,   
     Hills,
     Mountains,
 }
