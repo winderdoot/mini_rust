@@ -20,7 +20,7 @@ impl Default for CameraSettings {
             zoom_sensitivity: 1.0,
             initial_distance: 8.0,
             pitch_range: -FRAC_PI_2..-0.1,
-            distance_range: 0.5..10.0,
+            distance_range: 0.5..50.0,
         }
     }
 }
@@ -55,7 +55,7 @@ pub fn camera_system(
     let (transform, camera) = &mut *q_camera;
     // let window = q_window.single().unwrap();
     let orbit_scalar = 0.01;
-    let pan_scalar = 2.0;
+    let pan_scalar = 5.0;
 
     /* Panning */
     let mut forward_dir = *transform.forward();
@@ -78,11 +78,17 @@ pub fn camera_system(
     camera.center += move_dir.normalize_or_zero() * time.delta_secs() * settings.pan_sensitivity * pan_scalar;
 
     /* Zooming */
-    let delta_zoom = - mouse_scroll.delta.y * settings.zoom_sensitivity;
+    let mut delta_zoom = - mouse_scroll.delta.y * settings.zoom_sensitivity;
+    if keyboard.pressed(KeyCode::ArrowDown) {
+        delta_zoom += 10.0 * time.delta_secs() * settings.zoom_sensitivity;
+    }
+    if keyboard.pressed(KeyCode::ArrowUp) {
+        delta_zoom -= 10.0 * time.delta_secs() * settings.zoom_sensitivity;
+    }
     camera.orbit_distance = (camera.orbit_distance + delta_zoom).clamp(settings.distance_range.start, settings.distance_range.end);
 
     /* Rotation */
-    if mouse_buttons.pressed(MouseButton::Middle) {
+    if mouse_buttons.pressed(MouseButton::Right) {
         let delta = mouse_motion.delta;
         let delta_yaw = - delta.x * orbit_scalar * settings.orbit_sensitivity;
         let delta_pitch = - delta.y * orbit_scalar * settings.orbit_sensitivity;
