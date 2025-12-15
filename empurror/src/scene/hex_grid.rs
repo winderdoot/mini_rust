@@ -1,11 +1,11 @@
 use bevy::{
-    asset::RenderAssetUsages, color::palettes::css::*, mesh::Indices, platform::collections::HashMap, prelude::*, render::render_resource::PrimitiveTopology, window::PrimaryWindow
+    asset::RenderAssetUsages, color::palettes::{css::*, tailwind::*}, mesh::Indices, platform::collections::HashMap,
+    prelude::*, render::render_resource::PrimitiveTopology, window::PrimaryWindow,
+    image::ImageSamplerDescriptor
 };
 use hexx::{shapes, *};
 use std::f32::consts::{FRAC_PI_2};
-use crate::game_logic::province::*;
-use noise::Perlin;
-
+use crate::game_logic::{province::*, province_generator::*};
 
 const HEX_SIZE: f32 = 1.0;
 const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
@@ -14,6 +14,12 @@ const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
 pub struct HexGridSettings {
     pub hex_size: f32,
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>
+}
+
+impl HexGridSettings {
+    pub fn province_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
+        self.materials.get(province).unwrap().clone()
+    }
 }
 
 #[allow(dead_code)]
@@ -81,68 +87,57 @@ fn load_texture_materials(
 }
 
 fn load_color_materials(
-    mut commands: &Commands,
-    mut materials: &ResMut<Assets<StandardMaterial>>
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
-    
-    
-}
-
-pub fn load_hexgird_settings(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
-
-    // TODO: Zrobić emmisive materiał do tile'a na którym jest myszka
-    let water_img: Handle<Image> = asset_server.load("textures/tex_Water.png");
-    let stone_img: Handle<Image> = asset_server.load("textures/stone.png");
-    let sand_img: Handle<Image> = asset_server.load("textures/sand.png");
-    let darkgrass_img: Handle<Image> = asset_server.load("textures/grass_dark.png");
-    let grass_img: Handle<Image> = asset_server.load("textures/grass.png");
-    let snow_img: Handle<Image> = asset_server.load("textures/snow.png");
     
     map.insert(ProvinceType::Water, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(water_img),
+            base_color: Color::Srgba(DODGER_BLUE),
             perceptual_roughness: 0.1,
             ..Default::default()
         })
     );
     map.insert(ProvinceType::Hills, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(stone_img),
+            base_color: Color::Srgba(LIGHT_SLATE_GRAY),
             perceptual_roughness: 0.6,
             ..Default::default()
         })
     );
     map.insert(ProvinceType::Desert, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(sand_img),
+            base_color: Color::Srgba(KHAKI),
             perceptual_roughness: 0.9,
             ..Default::default()
         })
     );
     map.insert(ProvinceType::Woods, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(darkgrass_img),
+            base_color: Color::Srgba(SEA_GREEN),
             perceptual_roughness: 0.8,
             ..Default::default()
         })
     );
     map.insert(ProvinceType::Plains, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(grass_img),
+            base_color: Color::Srgba(OLIVE_DRAB),
             perceptual_roughness: 0.9,
             ..Default::default()
         })
     );
     map.insert(ProvinceType::Mountains, 
         materials.add(StandardMaterial {
-            base_color_texture: Some(snow_img),
-            perceptual_roughness: 0.3,
+            base_color: Color::Srgba(WHITE_SMOKE),
+            perceptual_roughness: 0.4,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::BlackSoil, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(YELLOW_950),
+            perceptual_roughness: 0.9,
             ..Default::default()
         })
     );
@@ -153,51 +148,61 @@ pub fn load_hexgird_settings(
     });
 }
 
+pub fn load_hexgird_settings(
+    mut commands: Commands,
+    // asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    load_color_materials(&mut commands, &mut materials);
+}
+
 #[derive(Resource, Default)]
 pub struct HexGrid {
     pub layout: HexLayout,
     pub entities: HashMap<Hex, Entity>,
 }
 
-pub fn setup_grid(
+fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
+    let mesh_info = PlaneMeshBuilder::new(hex_layout)
+    .facing(Vec3::Y)
+    .with_scale(Vec3::splat(1.0))
+    .build();
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, mesh_info.vertices)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_info.normals.clone())
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, mesh_info.uvs)
+    .with_inserted_indices(Indices::U16(mesh_info.indices))
+    .with_generated_tangents()
+    .unwrap()
+}
+
+pub fn setup_hexgrid(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     // mut materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<HexGridSettings>
 ) {
     let layout = HexLayout::flat().with_hex_size(settings.hex_size);
-    // let green_mat = materials.add(Color::Srgba(GREEN));
-    // let blue_mat = materials.add(Color::Srgba(LIGHT_SEA_GREEN));
-    // let sandy_mat = materials.add(Color::Srgba(SANDY_BROWN));
-    // let olive_mat = materials.add(Color::Srgba(OLIVE));
 
-    let mesh = compute_hex_mesh(&layout);
-    let mesh_handle = meshes.add(mesh);
-    let entities = shapes::hexagon(hex(0, 0), 10)
+    let hex_tile_mesh = compute_hex_mesh(&layout);
+    let mesh_handle = meshes.add(hex_tile_mesh);
+    let seed : u32= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u32;
+    let generator = ProvinceGenerator::new(seed, 0.0, 5.0);
+
+    let entities = shapes::flat_rectangle([-20, 20, -20, 20])
         .map(|hex| {
-            let mat;
-            if hex.x % 2 == 0 {
-                if hex.y % 2 == 0{
-                    mat = settings.materials.get(&ProvinceType::Mountains).unwrap();
-                }
-                else {
-                    mat = settings.materials.get(&ProvinceType::Water).unwrap();
-                }
-            }
-            else {
-                if hex.y % 2 == 0{
-                    mat = settings.materials.get(&ProvinceType::Woods).unwrap();
-                }
-                else {
-                    mat = settings.materials.get(&ProvinceType::Hills).unwrap();
-                }
-            }
             let pos = layout.hex_to_world_pos(hex);
+            let (province, h) = generator.get_province(&pos);
+            let mat = settings.province_material(&province);
 
             let id = commands.spawn((
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(mat.clone()),
-                Transform::from_xyz(pos.x, 0.0, pos.y)
+                Transform::from_xyz(pos.x, h, pos.y)
             )).id();
 
             (hex, id)
@@ -208,20 +213,4 @@ pub fn setup_grid(
         layout,
         entities
     });
-}
-
-fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
-    let mesh_info = PlaneMeshBuilder::new(hex_layout)
-        .facing(Vec3::Y)
-        .with_scale(Vec3::splat(1.0))
-        .build();
-
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, mesh_info.vertices)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_info.normals)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, mesh_info.uvs)
-    .with_inserted_indices(Indices::U16(mesh_info.indices))
 }

@@ -2,14 +2,13 @@
 
 use empurror::scene::panorbit_camera::*;
 use empurror::scene::hex_grid::*;
-use bevy::prelude::*;
-
+use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayConfig, FpsOverlayPlugin}};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins((DefaultPlugins, FpsOverlayPlugin::default()))
         .init_resource::<CameraSettings>()
-        .add_systems(Startup, (setup_scene, spawn_camera, setup_grid.after(load_hexgird_settings), load_hexgird_settings))
+        .add_systems(Startup, (setup_scene, spawn_camera, setup_hexgrid.after(load_hexgird_settings), load_hexgird_settings))
         .add_systems(Update, camera_system)
         .run();
 }

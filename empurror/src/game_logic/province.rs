@@ -7,6 +7,7 @@ use crate::game_logic::empire::*;
 #[derive(Hash, Debug, PartialEq, std::cmp::Eq)]
 pub enum ProvinceType {
     Water,
+    BlackSoil,
     Plains,
     Woods,
     Desert,   

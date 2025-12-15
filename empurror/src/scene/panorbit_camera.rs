@@ -15,12 +15,12 @@ pub struct CameraSettings {
 impl Default for CameraSettings {
     fn default() -> Self {
         Self { 
-            pan_sensitivity: 1.0, 
-            orbit_sensitivity: 1.0,
-            zoom_sensitivity: 1.0,
-            initial_distance: 8.0,
+            pan_sensitivity: 2.0, 
+            orbit_sensitivity: 0.6,
+            zoom_sensitivity: 3.0,
+            initial_distance: 70.0,
             pitch_range: -FRAC_PI_2..-0.1,
-            distance_range: 0.5..50.0,
+            distance_range: 1.0..80.0,
         }
     }
 }
@@ -55,7 +55,7 @@ pub fn camera_system(
     let (transform, camera) = &mut *q_camera;
     // let window = q_window.single().unwrap();
     let orbit_scalar = 0.01;
-    let pan_scalar = 5.0;
+    let pan_scalar = 7.0;
 
     /* Panning */
     let mut forward_dir = *transform.forward();
