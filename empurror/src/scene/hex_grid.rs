@@ -16,6 +16,79 @@ pub struct HexGridSettings {
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>
 }
 
+#[allow(dead_code)]
+fn load_texture_materials(
+    commands: &mut Commands,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    asset_server: &Res<AssetServer>
+) {
+    let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
+
+    let water_img: Handle<Image> = asset_server.load("textures/tex_Water.png");
+    let stone_img: Handle<Image> = asset_server.load("textures/stone.png");
+    let sand_img: Handle<Image> = asset_server.load("textures/sand.png");
+    let darkgrass_img: Handle<Image> = asset_server.load("textures/grass_dark.png");
+    let grass_img: Handle<Image> = asset_server.load("textures/grass.png");
+    let snow_img: Handle<Image> = asset_server.load("textures/snow.png");
+    
+    map.insert(ProvinceType::Water, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(water_img),
+            perceptual_roughness: 0.1,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::Hills, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(stone_img),
+            perceptual_roughness: 0.6,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::Desert, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(sand_img),
+            perceptual_roughness: 0.9,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::Woods, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(darkgrass_img),
+            perceptual_roughness: 0.8,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::Plains, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(grass_img),
+            perceptual_roughness: 0.9,
+            ..Default::default()
+        })
+    );
+    map.insert(ProvinceType::Mountains, 
+        materials.add(StandardMaterial {
+            base_color_texture: Some(snow_img),
+            perceptual_roughness: 0.3,
+            ..Default::default()
+        })
+    );
+
+    commands.insert_resource(HexGridSettings {
+        hex_size: HEX_SIZE,
+        materials: map
+    });
+}
+
+fn load_color_materials(
+    mut commands: &Commands,
+    mut materials: &ResMut<Assets<StandardMaterial>>
+) {
+    let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
+    
+    
+}
+
 pub fn load_hexgird_settings(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
