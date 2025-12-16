@@ -1,10 +1,10 @@
 use bevy::prelude::*;
-use bevy::ecs::entity::EntityHashSet;
-use bevy::ecs::system::RunSystemOnce;
+use std::cmp::Eq;
 
 use crate::game_logic::empire::*;
+use crate::scene::entity_picking::*;
 
-#[derive(Hash, Debug, PartialEq, std::cmp::Eq)]
+#[derive(Hash, Debug, PartialEq, Eq, Clone)]
 pub enum ProvinceType {
     Water,
     BlackSoil,
@@ -21,6 +21,15 @@ pub enum ProvinceType {
 pub struct ControlledBy(pub Entity);
 
 #[derive(Component)]
+#[require(Highlightable)]
 pub struct Province {
     pub prov_type: ProvinceType,
+}
+
+impl Province {
+    pub fn from_type(t: &ProvinceType) -> Self {
+        Self {
+            prov_type: t.clone()
+        }
+    }
 }

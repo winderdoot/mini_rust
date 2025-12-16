@@ -1,6 +1,7 @@
 use bevy::{input::{mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}}, prelude::*};
 use std::f32::consts::{PI, TAU, FRAC_PI_2};
 use std::ops::Range;
+use std::cmp::*;
 
 #[derive(Resource)]
 pub struct CameraSettings {
@@ -58,9 +59,12 @@ pub fn camera_system(
     let pan_scalar = 7.0;
 
     /* Panning */
-    let mut forward_dir = *transform.forward();
-    forward_dir.y = 0.0;
-    forward_dir = forward_dir.normalize();
+    let mut forward_dir = [*transform.forward(), *transform.up()]
+        .iter()
+        .map(|d| Vec3::new(d.x, 0.0, d.z))
+        .max_by(|v1, v2| v1.length().partial_cmp(&v2.length()).unwrap())
+        .unwrap()
+        .normalize();
     let y_axis = Vec3::new(0.0, 1.0, 0.0);
     let mut move_dir = Vec3::ZERO;
     if keyboard.pressed(KeyCode::KeyW) {
@@ -127,6 +131,6 @@ pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
     commands.spawn((
         OrbitCamera::from_distance(settings.initial_distance),
         Transform::from_xyz(2.0, settings.initial_distance, 2.0)
-            .looking_at(Vec3::ZERO, Vec3::Y)
+            .looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }

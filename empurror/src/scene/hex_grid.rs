@@ -1,11 +1,10 @@
 use bevy::{
     asset::RenderAssetUsages, color::palettes::{css::*, tailwind::*}, mesh::Indices, platform::collections::HashMap,
-    prelude::*, render::render_resource::PrimitiveTopology, window::PrimaryWindow,
-    image::ImageSamplerDescriptor
+    prelude::*, render::render_resource::PrimitiveTopology, picking::pointer::PointerInteraction
 };
 use hexx::{shapes, *};
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, PI};
-use crate::game_logic::{province::*, province_generator::*};
+use std::{f32::consts::{FRAC_PI_2, FRAC_PI_3, PI}, time::*};
+use crate::{game_logic::{province::*, province_generator::*}, scene::entity_picking::Highlightable};
 
 const HEX_SIZE: f32 = 1.0;
 const PRISM_HEIGHT: f32 = 1.0;
@@ -14,12 +13,17 @@ const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
 #[derive(Resource)]
 pub struct HexGridSettings {
     pub hex_size: f32,
-    pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>
+    pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
+    pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>
 }
 
 impl HexGridSettings {
     pub fn province_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
         self.materials.get(province).unwrap().clone()
+    }
+
+    pub fn hover_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
+        self.hover_materials.get(province).unwrap().clone()
     }
 }
 
@@ -83,7 +87,8 @@ fn load_texture_materials(
 
     commands.insert_resource(HexGridSettings {
         hex_size: HEX_SIZE,
-        materials: map
+        materials: map.clone(),
+        hover_materials: map
     });
 }
 
@@ -92,7 +97,9 @@ fn load_color_materials(
     materials: &mut ResMut<Assets<StandardMaterial>>,
 ) {
     let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
-    
+    let mut hover_map = map.clone();
+    let emission = LinearRgba::rgb(0.3, 0.3, 0.3);
+
     map.insert(ProvinceType::Water, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(DODGER_BLUE),
@@ -100,6 +107,15 @@ fn load_color_materials(
             ..Default::default()
         })
     );
+    hover_map.insert(ProvinceType::Water, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(DODGER_BLUE),
+            perceptual_roughness: 0.1,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
+
     map.insert(ProvinceType::Hills, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(LIGHT_SLATE_GRAY),
@@ -107,6 +123,16 @@ fn load_color_materials(
             ..Default::default()
         })
     );
+    hover_map.insert(ProvinceType::Hills, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(LIGHT_SLATE_GRAY),
+            perceptual_roughness: 0.6,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
+    
+
     map.insert(ProvinceType::Desert, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(KHAKI),
@@ -114,6 +140,15 @@ fn load_color_materials(
             ..Default::default()
         })
     );
+    hover_map.insert(ProvinceType::Desert, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(KHAKI),
+            perceptual_roughness: 0.9,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
+
     map.insert(ProvinceType::Woods, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(SEA_GREEN),
@@ -121,6 +156,15 @@ fn load_color_materials(
             ..Default::default()
         })
     );
+    hover_map.insert(ProvinceType::Woods, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(SEA_GREEN),
+            perceptual_roughness: 0.8,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
+
     map.insert(ProvinceType::Plains, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(OLIVE_DRAB),
@@ -128,13 +172,31 @@ fn load_color_materials(
             ..Default::default()
         })
     );
-    map.insert(ProvinceType::Mountains, 
+    hover_map.insert(ProvinceType::Plains, 
         materials.add(StandardMaterial {
-            base_color: Color::Srgba(WHITE_SMOKE),
-            perceptual_roughness: 0.4,
+            base_color: Color::Srgba(OLIVE_DRAB),
+            perceptual_roughness: 0.9,
+            emissive: emission,
             ..Default::default()
         })
     );
+
+    map.insert(ProvinceType::Mountains, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(WHITE_SMOKE),
+            perceptual_roughness: 0.35,
+            ..Default::default()
+        })
+    );
+    hover_map.insert(ProvinceType::Mountains, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(WHITE_SMOKE),
+            perceptual_roughness: 0.35,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
+
     map.insert(ProvinceType::BlackSoil, 
         materials.add(StandardMaterial {
             base_color: Color::Srgba(YELLOW_950),
@@ -142,10 +204,19 @@ fn load_color_materials(
             ..Default::default()
         })
     );
+    hover_map.insert(ProvinceType::BlackSoil, 
+        materials.add(StandardMaterial {
+            base_color: Color::Srgba(YELLOW_950),
+            perceptual_roughness: 0.9,
+            emissive: emission,
+            ..Default::default()
+        })
+    );
 
     commands.insert_resource(HexGridSettings {
         hex_size: HEX_SIZE,
-        materials: map
+        materials: map,
+        hover_materials: hover_map
     });
 }
 
@@ -195,13 +266,16 @@ pub fn setup_hexgrid(
 
     let hex_tile_mesh = compute_hex_prism_mesh(HEX_SIZE, PRISM_HEIGHT);
     let mesh_handle = meshes.add(hex_tile_mesh);
-    let seed : u32= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u32;
+    let seed : u32= SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
     let generator = ProvinceGenerator::new(seed, 0.0, 4.5);
 
     let tiles = generator.generate(
         shapes::flat_rectangle([-20, 20, -20, 20]),
         &layout
     );
+
+    let mut hover_observer = Observer::new(tile_hover::<Pointer<Over>>);
+    let mut leave_observer = Observer::new(tile_hover::<Pointer<Out>>);
 
     let tile_entities = tiles
         .into_iter()
@@ -215,10 +289,14 @@ pub fn setup_hexgrid(
             transform.rotate_axis(Dir3::Y, PI / 6.0);
 
             let id = commands.spawn((
+                Province { prov_type: province },
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(mat.clone()),
                 transform
             )).id();
+
+            hover_observer.watch_entity(id);
+            leave_observer.watch_entity(id);
 
             (hex, id)
         })
@@ -228,4 +306,25 @@ pub fn setup_hexgrid(
         layout,
         entities: tile_entities
     });
+
+    commands.spawn(hover_observer);
+    commands.spawn(leave_observer);
 }
+
+pub fn tile_hover<E: EntityEvent>(
+    event: On<E>,
+    mut query: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Highlightable, &Province)>,
+    settings: Res<HexGridSettings>
+) {
+    let entity = event.event_target();
+    if let Ok((mut material, mut h, prov)) = query.get_mut(entity) {
+        h.highlighted = !h.highlighted;
+
+        if h.highlighted {
+            material.0 = settings.hover_material(&prov.prov_type).clone();
+        }
+        else {
+            material.0 = settings.province_material(&prov.prov_type)
+        }
+    }
+}   

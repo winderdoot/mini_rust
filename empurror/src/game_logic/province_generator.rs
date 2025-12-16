@@ -126,7 +126,6 @@ impl ProvinceGenerator {
                     continue;
                 }
                 let water_amount = (self.count_water_neighbors(hex, layout) + 8.0 * self.get_humidity(&layout.hex_to_world_pos(*hex))) / 10.0;
-                info!("{}", water_amount);
                 if water_amount > BLACKSOIL_HUMID {
                     *province = ProvinceType::BlackSoil
                 }
