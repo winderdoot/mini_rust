@@ -1,2 +1,2 @@
-pub mod panorbit_camera;
+pub mod orbit_camera;
 pub mod hex_grid;

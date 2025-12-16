@@ -28,12 +28,12 @@ impl Default for CameraSettings {
 
 #[derive(Component)]
 #[require(Camera3d)]
-pub struct PanOrbitCamera {
+pub struct OrbitCamera {
     center: Vec3,
     orbit_distance: f32,
 }
 
-impl PanOrbitCamera {
+impl OrbitCamera {
     fn from_distance(distance: f32) -> Self {
         Self {
             center: Vec3::ZERO,
@@ -43,7 +43,7 @@ impl PanOrbitCamera {
 }
 
 pub fn camera_system(
-    mut q_camera: Single<(&mut Transform, &mut PanOrbitCamera)>,
+    mut q_camera: Single<(&mut Transform, &mut OrbitCamera)>,
     settings: Res<CameraSettings>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
@@ -125,7 +125,7 @@ pub fn camera_system(
 
 pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
     commands.spawn((
-        PanOrbitCamera::from_distance(settings.initial_distance),
+        OrbitCamera::from_distance(settings.initial_distance),
         Transform::from_xyz(2.0, settings.initial_distance, 2.0)
             .looking_at(Vec3::ZERO, Vec3::Y)
     ));

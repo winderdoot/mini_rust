@@ -4,10 +4,11 @@ use bevy::{
     image::ImageSamplerDescriptor
 };
 use hexx::{shapes, *};
-use std::f32::consts::{FRAC_PI_2};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use crate::game_logic::{province::*, province_generator::*};
 
 const HEX_SIZE: f32 = 1.0;
+const PRISM_HEIGHT: f32 = 1.0;
 const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
 
 #[derive(Resource)]
@@ -164,9 +165,9 @@ pub struct HexGrid {
 
 fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
     let mesh_info = PlaneMeshBuilder::new(hex_layout)
-    .facing(Vec3::Y)
-    .with_scale(Vec3::splat(1.0))
-    .build();
+        .facing(Vec3::Y)
+        .with_scale(Vec3::splat(1.0))
+        .build();
 
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -180,6 +181,10 @@ fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
     .unwrap()
 }
 
+fn compute_hex_prism_mesh(hex_size: f32, height: f32) -> Mesh {
+    Extrusion::new(RegularPolygon::new(hex_size, 6), height).into()
+}
+
 pub fn setup_hexgrid(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -188,21 +193,31 @@ pub fn setup_hexgrid(
 ) {
     let layout = HexLayout::flat().with_hex_size(settings.hex_size);
 
-    let hex_tile_mesh = compute_hex_mesh(&layout);
+    let hex_tile_mesh = compute_hex_prism_mesh(HEX_SIZE, PRISM_HEIGHT);
     let mesh_handle = meshes.add(hex_tile_mesh);
     let seed : u32= std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u32;
-    let generator = ProvinceGenerator::new(seed, 0.0, 5.0);
+    let generator = ProvinceGenerator::new(seed, 0.0, 4.5);
 
-    let entities = shapes::flat_rectangle([-20, 20, -20, 20])
-        .map(|hex| {
-            let pos = layout.hex_to_world_pos(hex);
-            let (province, h) = generator.get_province(&pos);
+    let tiles = generator.generate(
+        shapes::flat_rectangle([-20, 20, -20, 20]),
+        &layout
+    );
+
+    let tile_entities = tiles
+        .into_iter()
+        .map(|(hex, mut pos, province)| {
             let mat = settings.province_material(&province);
+            
+            /* The prism mesh is extruded along the z axis, we have to translate it and rotate it properly */
+            pos.y -= PRISM_HEIGHT * 0.05f32; 
+            let mut transform = Transform::from_translation(pos);
+            transform.rotate_axis(Dir3::X, PI * 0.5);
+            transform.rotate_axis(Dir3::Y, PI / 6.0);
 
             let id = commands.spawn((
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(mat.clone()),
-                Transform::from_xyz(pos.x, h, pos.y)
+                transform
             )).id();
 
             (hex, id)
@@ -211,6 +226,6 @@ pub fn setup_hexgrid(
 
     commands.insert_resource(HexGrid {
         layout,
-        entities
+        entities: tile_entities
     });
 }
