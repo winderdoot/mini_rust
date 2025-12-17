@@ -8,11 +8,16 @@ use crate::{game_logic::{province::*, province_generator::*}, scene::entity_pick
 
 const HEX_SIZE: f32 = 1.0;
 const PRISM_HEIGHT: f32 = 1.0;
+const MIN_HEIGHT: f32 = 0.0;
+const MAX_HEIGHT: f32 = 5.0;
 const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
 
 #[derive(Resource)]
 pub struct HexGridSettings {
     pub hex_size: f32,
+    pub prism_height: f32,
+    pub max_height: f32,
+    pub min_height: f32,
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
     pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>
 }
@@ -27,75 +32,9 @@ impl HexGridSettings {
     }
 }
 
-#[allow(dead_code)]
-fn load_texture_materials(
-    commands: &mut Commands,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    asset_server: &Res<AssetServer>
-) {
-    let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
-
-    let water_img: Handle<Image> = asset_server.load("textures/tex_Water.png");
-    let stone_img: Handle<Image> = asset_server.load("textures/stone.png");
-    let sand_img: Handle<Image> = asset_server.load("textures/sand.png");
-    let darkgrass_img: Handle<Image> = asset_server.load("textures/grass_dark.png");
-    let grass_img: Handle<Image> = asset_server.load("textures/grass.png");
-    let snow_img: Handle<Image> = asset_server.load("textures/snow.png");
-    
-    map.insert(ProvinceType::Water, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(water_img),
-            perceptual_roughness: 0.1,
-            ..Default::default()
-        })
-    );
-    map.insert(ProvinceType::Hills, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(stone_img),
-            perceptual_roughness: 0.6,
-            ..Default::default()
-        })
-    );
-    map.insert(ProvinceType::Desert, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(sand_img),
-            perceptual_roughness: 0.9,
-            ..Default::default()
-        })
-    );
-    map.insert(ProvinceType::Woods, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(darkgrass_img),
-            perceptual_roughness: 0.8,
-            ..Default::default()
-        })
-    );
-    map.insert(ProvinceType::Plains, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(grass_img),
-            perceptual_roughness: 0.9,
-            ..Default::default()
-        })
-    );
-    map.insert(ProvinceType::Mountains, 
-        materials.add(StandardMaterial {
-            base_color_texture: Some(snow_img),
-            perceptual_roughness: 0.3,
-            ..Default::default()
-        })
-    );
-
-    commands.insert_resource(HexGridSettings {
-        hex_size: HEX_SIZE,
-        materials: map.clone(),
-        hover_materials: map
-    });
-}
-
 fn load_color_materials(
-    commands: &mut Commands,
     materials: &mut ResMut<Assets<StandardMaterial>>,
-) {
+) -> (HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>) {
     let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
     let mut hover_map = map.clone();
     let emission = LinearRgba::rgb(0.3, 0.3, 0.3);
@@ -213,11 +152,7 @@ fn load_color_materials(
         })
     );
 
-    commands.insert_resource(HexGridSettings {
-        hex_size: HEX_SIZE,
-        materials: map,
-        hover_materials: hover_map
-    });
+    (map, hover_map)    
 }
 
 pub fn load_hexgird_settings(
@@ -225,7 +160,16 @@ pub fn load_hexgird_settings(
     // asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    load_color_materials(&mut commands, &mut materials);
+    let (materials, hover_materials) = load_color_materials(&mut materials);
+
+    commands.insert_resource(HexGridSettings {
+        hex_size: HEX_SIZE,
+        prism_height: PRISM_HEIGHT,
+        min_height: MIN_HEIGHT,
+        max_height: MAX_HEIGHT,
+        materials,
+        hover_materials,
+    });
 }
 
 #[derive(Resource, Default)]
@@ -267,7 +211,7 @@ pub fn setup_hexgrid(
     let hex_tile_mesh = compute_hex_prism_mesh(HEX_SIZE, PRISM_HEIGHT);
     let mesh_handle = meshes.add(hex_tile_mesh);
     let seed : u32= SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
-    let generator = ProvinceGenerator::new(seed, 0.0, 4.5);
+    let generator = ProvinceGenerator::new(seed, MIN_HEIGHT, MAX_HEIGHT);
 
     let tiles = generator.generate(
         shapes::flat_rectangle([-20, 20, -20, 20]),

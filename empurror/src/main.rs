@@ -26,7 +26,7 @@ pub fn setup_scene(
         },
         Transform {
             translation: Vec3::new(0.0, 100.0, 0.0),
-            rotation: Quat::from_rotation_x(-PI / 4.),
+            rotation: Quat::from_rotation_x(-PI / 4.0),
             ..default()
         },
         // The default cascade config is designed to handle large scenes.

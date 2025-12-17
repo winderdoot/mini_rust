@@ -21,7 +21,7 @@ impl Default for CameraSettings {
             zoom_sensitivity: 3.0,
             initial_distance: 70.0,
             pitch_range: -FRAC_PI_2..-0.1,
-            distance_range: 1.0..80.0,
+            distance_range: 10.0..80.0,
         }
     }
 }
@@ -130,7 +130,7 @@ pub fn camera_system(
 pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
     commands.spawn((
         OrbitCamera::from_distance(settings.initial_distance),
-        Transform::from_xyz(2.0, settings.initial_distance, 2.0)
+        Transform::from_xyz(2.0, settings.initial_distance, 0.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }
