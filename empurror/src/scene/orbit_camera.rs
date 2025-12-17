@@ -1,9 +1,9 @@
-use bevy::{input::{mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}}, prelude::*};
+use bevy::{core_pipeline::prepass::DepthPrepass, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*, render::experimental::occlusion_culling::OcclusionCulling};
 use std::f32::consts::{PI, TAU, FRAC_PI_2};
 use std::ops::Range;
 use std::cmp::*;
 
-use crate::scene::recently_moved::*;
+use crate::{game_logic::recently_moved::*, system_sets::UpdateSystems};
 
 #[derive(Resource)]
 pub struct CameraSettings {
@@ -23,6 +23,7 @@ impl Default for CameraSettings {
             zoom_sensitivity: 3.0,
             initial_distance: 70.0,
             pitch_range: -FRAC_PI_2..-0.1,
+            // pitch_range: -FRAC_PI_2..2.0,
             distance_range: 10.0..80.0,
         }
     }
@@ -61,7 +62,7 @@ pub fn camera_system(
     moved.0 = false; /* Only going to register as moved if player rotates the camera */
 
     /* Panning */
-    let mut forward_dir = [*transform.forward(), *transform.up()]
+    let forward_dir = [*transform.forward(), *transform.up()]
         .iter()
         .map(|d| Vec3::new(d.x, 0.0, d.z))
         .max_by(|v1, v2| v1.length().partial_cmp(&v2.length()).unwrap())
@@ -136,6 +137,8 @@ pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
         OrbitCamera::from_distance(settings.initial_distance),
         Transform::from_xyz(2.0, settings.initial_distance, 0.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
+        // DepthPrepass,
+        // OcclusionCulling
     ));
 }
 
@@ -148,6 +151,6 @@ impl Plugin for OrbitCameraPlugin {
         app
             .init_resource::<CameraSettings>()
             .add_systems(Startup, spawn_camera)
-            .add_systems(Update, camera_system);
+            .add_systems(Update, camera_system.in_set(UpdateSystems::Camera));
     }
 }

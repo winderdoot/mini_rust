@@ -1,6 +1,5 @@
 
-use bevy::{dev_tools::states::*, prelude::*};
-use bevy::ui::*;
+use bevy::prelude::*;
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub enum AppState {
@@ -12,7 +11,7 @@ pub enum AppState {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
 #[source(AppState = AppState::InGame)]
 #[states(scoped_entities)]
-pub enum ViewMode {
+pub enum GridViewMode {
     #[default]
     Terrain,
     Empire,
@@ -27,21 +26,14 @@ pub enum IsPaused {
     Paused,
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
-pub enum CameraState {
-    Moving,
-    #[default]
-    InGame,
-}
-
 /* Init Plugin */
-pub struct StatePlugin;
+pub struct GameStatePlugin;
 
-impl Plugin for StatePlugin {
+impl Plugin for GameStatePlugin {
     fn build(&self, app: &mut App) {
         app
             .insert_state::<AppState>(AppState::InGame)
-            .add_sub_state::<ViewMode>()
+            .add_sub_state::<GridViewMode>()
             .add_sub_state::<IsPaused>();
     }
 }

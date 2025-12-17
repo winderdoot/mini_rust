@@ -1,8 +1,8 @@
 use bevy::prelude::*;
 use std::cmp::Eq;
 
-use crate::game_logic::empire::*;
-use crate::scene::entity_picking::*;
+use crate::game_logic::empire::Controls;
+use crate::scene::mesh_highlight::*;
 
 #[derive(Hash, Debug, PartialEq, Eq, Clone)]
 pub enum ProvinceType {

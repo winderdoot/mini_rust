@@ -1,11 +1,14 @@
 use bevy::{
     asset::RenderAssetUsages, color::palettes::{css::*, tailwind::*}, mesh::Indices, platform::collections::HashMap,
-    prelude::*, render::render_resource::PrimitiveTopology
+    prelude::*, render::render_resource::{PrimitiveTopology}
 };
-use hexx::{shapes, *};
-use std::{f32::consts::{FRAC_PI_2, FRAC_PI_3, PI}, time::*};
 
-use crate::{game_logic::{province::*, province_generator::*}, scene::entity_picking::*};
+use hexx::{shapes, *};
+use std::{f32::consts::{PI}, time::*};
+use indexmap::IndexMap;
+use rand::Rng;
+
+use crate::{game_logic::{empire::{Empire}, province::*, province_generator::*}, scene::mesh_highlight::*, system_sets::StartupSystems};
 
 /* Constants */
 const HEX_SIZE: f32 = 1.0;
@@ -20,7 +23,8 @@ pub struct HexGridSettings {
     pub max_height: f32,
     pub min_height: f32,
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
-    pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>
+    pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
+    pub empire_materials: HashMap<(ProvinceType, u32), Handle<StandardMaterial>>
 }
 
 impl HexGridSettings {
@@ -31,6 +35,10 @@ impl HexGridSettings {
     pub fn hover_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
         self.hover_materials.get(province).unwrap().clone()
     }
+
+    pub fn empire_material(&self, province: &ProvinceType, empire_id: u32) -> Handle<StandardMaterial> {
+        self.empire_materials.get(&(province.clone(), empire_id)).unwrap().clone()
+    }
 }
 
 fn load_color_materials(
@@ -38,7 +46,7 @@ fn load_color_materials(
 ) -> (HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>) {
     let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
     let mut hover_map = map.clone();
-    let emission = LinearRgba::rgb(0.3, 0.3, 0.3);
+    let emission = LinearRgba::rgb(0.2, 0.2, 0.2);
 
     map.insert(ProvinceType::Water, 
         materials.add(StandardMaterial {
@@ -156,26 +164,68 @@ fn load_color_materials(
     (map, hover_map)    
 }
 
+fn create_empire_materials(
+    material_map: &HashMap<ProvinceType, Handle<StandardMaterial>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    empires: &Query<&Empire>
+) -> HashMap<(ProvinceType, u32), Handle<StandardMaterial>> {
+    let empires = empires.iter().collect::<Vec<&Empire>>();
+    // let empires = Vec::<&Empire>::new();
+
+    material_map
+        .iter()
+        .flat_map(|(p, h)| {
+            empires
+                .iter()
+                .map(|e| {
+                    let mat = materials.get(h).unwrap();
+                    let mut new_mat = mat.clone();
+                    new_mat.emissive = LinearRgba::from(e.color);
+                    // TODO: Add clearcoat to water material
+                    let new_handle = materials.add(new_mat);
+                    
+                    ((p.clone(), e.id), new_handle)
+                })
+                .collect::<HashMap<(ProvinceType, u32), Handle<StandardMaterial>>>()
+            }
+        )
+        .collect()
+}
+
 pub fn load_hexgird_settings(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    empires: Query<&Empire>
 ) {
-    let (materials, hover_materials) = load_color_materials(&mut materials);
+    let (material_map, hover_map) = load_color_materials(&mut materials);
+    let empire_map = create_empire_materials(&material_map, &mut materials, &empires);
 
     commands.insert_resource(HexGridSettings {
         hex_size: HEX_SIZE,
         prism_height: PRISM_HEIGHT,
         min_height: MIN_HEIGHT,
         max_height: MAX_HEIGHT,
-        materials,
-        hover_materials,
+        materials: material_map,
+        hover_materials: hover_map,
+        empire_materials: empire_map
     });
 }
 
 #[derive(Resource, Default)]
 pub struct HexGrid {
     pub layout: HexLayout,
-    pub entities: HashMap<Hex, Entity>,
+    pub entities: IndexMap<Hex, Entity>,
+}
+
+impl HexGrid {
+    pub fn get_random_tile(&self) -> (&Hex, &Entity) {
+        let index = rand::rng().random_range(0..self.entities.len());
+        self.entities.get_index(index).unwrap()
+    }
+
+    pub fn get_entity(&self, hex: &Hex) -> Option<&Entity> {
+        self.entities.get(hex)
+    }
 }
 
 #[allow(dead_code)]
@@ -223,7 +273,7 @@ pub fn setup_hexgrid(
     let mut hover_observer = Observer::new(tile_hover::<Pointer<Over>>);
     let mut leave_observer = Observer::new(tile_hover::<Pointer<Out>>);
 
-    let tile_entities = tiles
+    let tile_entities: IndexMap<Hex, Entity> = tiles
         .into_iter()
         .map(|(hex, mut pos, province)| {
             let mat = settings.province_material(&province);
@@ -250,7 +300,7 @@ pub fn setup_hexgrid(
 
     commands.insert_resource(HexGrid {
         layout,
-        entities: tile_entities
+        entities: tile_entities,
     });
 
     commands.spawn(hover_observer);
@@ -262,6 +312,13 @@ pub struct HexGridPlugin;
 
 impl Plugin for HexGridPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (load_hexgird_settings, setup_hexgrid).chain());
+        app
+            .add_systems(Startup, (
+                load_hexgird_settings, 
+                setup_hexgrid
+            )
+            .chain()
+            .in_set(StartupSystems::CreateHexGrid)
+        );
     }
 }

@@ -1,7 +1,7 @@
-use crate::game_logic::province::{self, ProvinceType};
+use crate::game_logic::province::{ProvinceType};
 use bevy::{prelude::*};
 use hexx::*;
-use noise::{NoiseFn, Simplex, Seedable};
+use noise::{NoiseFn, Simplex};
 
 const COOL_CONST: u32 = 213769420;
 
@@ -121,7 +121,7 @@ impl ProvinceGenerator {
             })
             .collect();
         
-            for (hex, pos, province) in &mut tiles {
+            for (hex, _pos, province) in &mut tiles {
                 if let ProvinceType::Water = province {
                     continue;
                 }
