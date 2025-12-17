@@ -3,6 +3,8 @@ use std::f32::consts::{PI, TAU, FRAC_PI_2};
 use std::ops::Range;
 use std::cmp::*;
 
+use crate::scene::recently_moved::*;
+
 #[derive(Resource)]
 pub struct CameraSettings {
     pan_sensitivity: f32,
@@ -26,9 +28,8 @@ impl Default for CameraSettings {
     }
 }
 
-
 #[derive(Component)]
-#[require(Camera3d)]
+#[require(Camera3d, CurrentlyMoving, RecentlyMoved)]
 pub struct OrbitCamera {
     center: Vec3,
     orbit_distance: f32,
@@ -44,7 +45,7 @@ impl OrbitCamera {
 }
 
 pub fn camera_system(
-    mut q_camera: Single<(&mut Transform, &mut OrbitCamera)>,
+    mut q_camera: Single<(&mut Transform, &mut OrbitCamera, &mut CurrentlyMoving)>,
     settings: Res<CameraSettings>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mouse_motion: Res<AccumulatedMouseMotion>,
@@ -53,10 +54,11 @@ pub fn camera_system(
     // q_window: Query<&Window, With<PrimaryWindow>>,
     time: Res<Time>
 ) {
-    let (transform, camera) = &mut *q_camera;
+    let (transform, camera, moved) = &mut *q_camera;
     // let window = q_window.single().unwrap();
     let orbit_scalar = 0.01;
     let pan_scalar = 7.0;
+    moved.0 = false; /* Only going to register as moved if player rotates the camera */
 
     /* Panning */
     let mut forward_dir = [*transform.forward(), *transform.up()]
@@ -100,6 +102,8 @@ pub fn camera_system(
         yaw = yaw + delta_yaw;
         pitch = (pitch + delta_pitch).clamp(settings.pitch_range.start, settings.pitch_range.end);
         transform.rotation = Quat::from_euler(EulerRot::YXZ, yaw, pitch, roll);
+
+        moved.0  = true;
     }
 
     /* Translate the camera to keep it centered on set point */
@@ -133,4 +137,17 @@ pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
         Transform::from_xyz(2.0, settings.initial_distance, 0.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
     ));
+}
+
+/* Init Plugin */
+
+pub struct OrbitCameraPlugin;
+
+impl Plugin for OrbitCameraPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .init_resource::<CameraSettings>()
+            .add_systems(Startup, spawn_camera)
+            .add_systems(Update, camera_system);
+    }
 }

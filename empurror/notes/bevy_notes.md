@@ -27,3 +27,7 @@ States trait for implementing game state that determines which systems can run.
 
 Generally avoid them UNLESS you want to spawn/despawn many entities or do something that can only be done with commands.  
 For example setting up the game world at the beginning/when new level is loaded
+
+# Questions:
+
+- figure out what the hell are state scoped entities and if I can use them, or avoid using them so my entites don't despawn when I don't want to

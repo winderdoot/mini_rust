@@ -1,16 +1,17 @@
 use bevy::{
     asset::RenderAssetUsages, color::palettes::{css::*, tailwind::*}, mesh::Indices, platform::collections::HashMap,
-    prelude::*, render::render_resource::PrimitiveTopology, picking::pointer::PointerInteraction
+    prelude::*, render::render_resource::PrimitiveTopology
 };
 use hexx::{shapes, *};
 use std::{f32::consts::{FRAC_PI_2, FRAC_PI_3, PI}, time::*};
-use crate::{game_logic::{province::*, province_generator::*}, scene::entity_picking::Highlightable};
 
+use crate::{game_logic::{province::*, province_generator::*}, scene::entity_picking::*};
+
+/* Constants */
 const HEX_SIZE: f32 = 1.0;
 const PRISM_HEIGHT: f32 = 1.0;
 const MIN_HEIGHT: f32 = 0.0;
 const MAX_HEIGHT: f32 = 5.0;
-const GRASS: Color = Color::linear_rgb(0.235, 0.549, 0.129);
 
 #[derive(Resource)]
 pub struct HexGridSettings {
@@ -157,7 +158,6 @@ fn load_color_materials(
 
 pub fn load_hexgird_settings(
     mut commands: Commands,
-    // asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let (materials, hover_materials) = load_color_materials(&mut materials);
@@ -178,6 +178,7 @@ pub struct HexGrid {
     pub entities: HashMap<Hex, Entity>,
 }
 
+#[allow(dead_code)]
 fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
     let mesh_info = PlaneMeshBuilder::new(hex_layout)
         .facing(Vec3::Y)
@@ -200,10 +201,11 @@ fn compute_hex_prism_mesh(hex_size: f32, height: f32) -> Mesh {
     Extrusion::new(RegularPolygon::new(hex_size, 6), height).into()
 }
 
+/// System responsible for setting up the entire hexgird game board.
+/// Also sets up tile hover mechanic via entity observers
 pub fn setup_hexgrid(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    // mut materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<HexGridSettings>
 ) {
     let layout = HexLayout::flat().with_hex_size(settings.hex_size);
@@ -255,20 +257,11 @@ pub fn setup_hexgrid(
     commands.spawn(leave_observer);
 }
 
-pub fn tile_hover<E: EntityEvent>(
-    event: On<E>,
-    mut query: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Highlightable, &Province)>,
-    settings: Res<HexGridSettings>
-) {
-    let entity = event.event_target();
-    if let Ok((mut material, mut h, prov)) = query.get_mut(entity) {
-        h.highlighted = !h.highlighted;
+/* Init Plugin */
+pub struct HexGridPlugin;
 
-        if h.highlighted {
-            material.0 = settings.hover_material(&prov.prov_type).clone();
-        }
-        else {
-            material.0 = settings.province_material(&prov.prov_type)
-        }
+impl Plugin for HexGridPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, (load_hexgird_settings, setup_hexgrid).chain());
     }
-}   
+}

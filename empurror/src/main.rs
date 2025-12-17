@@ -1,22 +1,32 @@
 use empurror::scene::orbit_camera::*;
 use empurror::scene::hex_grid::*;
+use empurror::game_logic::game_states::*;
+use empurror::scene::recently_moved::RecentlyMovedPlugin;
 
-use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, picking::pointer::PointerInteraction, light::CascadeShadowConfigBuilder};
+use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
 use std::f32::consts::{PI};
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, FpsOverlayPlugin::default(), MeshPickingPlugin))
-        .init_resource::<CameraSettings>()
-        .add_systems(Startup, (setup_scene, spawn_camera, setup_hexgrid.after(load_hexgird_settings), load_hexgird_settings))
-        .add_systems(Update, camera_system)
+        .add_plugins(
+            (
+                /* Bevy built-in plugins */
+                DefaultPlugins,
+                FpsOverlayPlugin::default(),
+                MeshPickingPlugin,
+                /* Empurror custom plugins */
+                StatePlugin,
+                OrbitCameraPlugin,
+                RecentlyMovedPlugin,
+                HexGridPlugin
+            )
+        )
+        .add_systems(Startup, setup_light)
         .run();
 }
 
-pub fn setup_scene(
+pub fn setup_light(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>
 ) {
     commands.spawn((
         DirectionalLight {
