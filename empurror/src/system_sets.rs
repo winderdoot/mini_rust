@@ -2,15 +2,18 @@ use bevy::prelude::*;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum StartupSystems {
+    LoadAssets,
     CreateEmpires,
     CreateHexGrid,
     AssignEmpireProvinces,
+    InitTurns,
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum UpdateSystems {
     Camera,
-    UIControls
+    UIControls,
+    OnMessage
 }
 
 /* Init Plugin */
@@ -24,13 +27,16 @@ impl Plugin for SystemSetsPlugin {
     fn build(&self, app: &mut App) {
         app
             .configure_sets(Startup, (
+                StartupSystems::LoadAssets,
                 StartupSystems::CreateEmpires,
                 StartupSystems::CreateHexGrid,
-                StartupSystems::AssignEmpireProvinces
+                StartupSystems::AssignEmpireProvinces,
+                StartupSystems::InitTurns
             ).chain())
             .configure_sets(Update, (
                 UpdateSystems::Camera,
-                UpdateSystems::UIControls
+                UpdateSystems::UIControls,
+                UpdateSystems::OnMessage
             ));
     }
 }

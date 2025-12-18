@@ -1,4 +1,5 @@
 use empurror::game_logic::empire::EmpirePlugin;
+use empurror::scene::assets::GameModelsPlugin;
 use empurror::scene::{hex_grid::*, orbit_camera::*};
 use empurror::game_logic::{game_states::*, recently_moved::RecentlyMovedPlugin};
 use empurror::system_sets::*;
@@ -19,10 +20,11 @@ fn main() {
                 SystemSetsPlugin, /* Manages system sets and their ordering */
                 GameStatePlugin,
                 HexGridPlugin,
+                GameModelsPlugin,
                 OrbitCameraPlugin,
                 UIControlsPlugin,
                 RecentlyMovedPlugin,
-                EmpirePlugin { empire_count: 5 }
+                EmpirePlugin { empire_count: 1 }
             )
         )
         .add_systems(Startup, setup_light)

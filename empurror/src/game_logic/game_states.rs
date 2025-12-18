@@ -11,6 +11,15 @@ pub enum AppState {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
 #[source(AppState = AppState::InGame)]
 #[states(scoped_entities)]
+pub enum IsPlayerTurn {
+    #[default]
+    Yes,
+    No
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+#[source(AppState = AppState::InGame)]
+#[states(scoped_entities)]
 pub enum GridViewMode {
     #[default]
     Terrain,
@@ -33,6 +42,7 @@ impl Plugin for GameStatePlugin {
     fn build(&self, app: &mut App) {
         app
             .insert_state::<AppState>(AppState::InGame)
+            .add_sub_state::<IsPlayerTurn>()
             .add_sub_state::<GridViewMode>()
             .add_sub_state::<IsPaused>();
     }

@@ -33,3 +33,37 @@ impl Province {
         }
     }
 }
+
+/* Source of truth in LocatedIn <-> ProvinceBuildings  */
+#[derive(Component, Deref)]
+#[relationship(relationship_target = ProvinceBuildings)]
+pub struct LocatedIn(pub Entity);
+
+#[derive(Component)]
+#[relationship_target(relationship = LocatedIn)]
+pub struct ProvinceBuildings(Vec<Entity>);
+
+
+/* Buildings */
+#[derive(Component, Default)]
+pub struct Building;
+
+#[derive(Component)]
+#[require(Building)]
+pub struct House {
+    pub population: u32,
+    pub max_population: u32
+}
+
+#[derive(Event, Debug)]
+pub struct HouseAdded {
+    pub province: Entity
+}
+
+/* Systems */
+pub fn add_house(
+    event: On<HouseAdded>
+) {
+    
+}
+

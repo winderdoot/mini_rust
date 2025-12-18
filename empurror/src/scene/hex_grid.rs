@@ -11,10 +11,12 @@ use rand::Rng;
 use crate::{game_logic::{empire::{Empire}, province::*, province_generator::*}, scene::mesh_highlight::*, system_sets::StartupSystems};
 
 /* Constants */
-const HEX_SIZE: f32 = 1.0;
-const PRISM_HEIGHT: f32 = 1.0;
+pub const HEX_SIZE: f32 = 1.0;
+pub const PRISM_HEIGHT: f32 = 1.0;
 const MIN_HEIGHT: f32 = 0.0;
 const MAX_HEIGHT: f32 = 5.0;
+const HEX_X_ROT: f32 = PI / 2.0;
+const HEX_Y_ROT: f32 = PI / 6.0;
 
 #[derive(Resource)]
 pub struct HexGridSettings {
@@ -170,7 +172,6 @@ fn create_empire_materials(
     empires: &Query<&Empire>
 ) -> HashMap<(ProvinceType, u32), Handle<StandardMaterial>> {
     let empires = empires.iter().collect::<Vec<&Empire>>();
-    // let empires = Vec::<&Empire>::new();
 
     material_map
         .iter()
@@ -279,10 +280,10 @@ pub fn setup_hexgrid(
             let mat = settings.province_material(&province);
             
             /* The prism mesh is extruded along the z axis, we have to translate it and rotate it properly */
-            pos.y -= PRISM_HEIGHT * 0.05f32; 
+            pos.y -= PRISM_HEIGHT * 0.5; 
             let mut transform = Transform::from_translation(pos);
-            transform.rotate_axis(Dir3::X, PI * 0.5);
-            transform.rotate_axis(Dir3::Y, PI / 6.0);
+            transform.rotate_axis(Dir3::X, HEX_X_ROT);
+            transform.rotate_axis(Dir3::Y, HEX_Y_ROT);
 
             let id = commands.spawn((
                 Province { prov_type: province },
@@ -306,6 +307,16 @@ pub fn setup_hexgrid(
     commands.spawn(hover_observer);
     commands.spawn(leave_observer);
 }
+
+/// Cursed function that only exists because my province tiles have incorrectly oriented meshes and it causes all province children to be horribly
+/// oriented
+pub fn hextile_rel_transform(tile: &Transform, rel: &Transform) -> Transform {
+    let pos = tile.translation + rel.translation;
+
+    Transform::from_translation(pos).with_rotation(rel.rotation)
+}
+
+
 
 /* Init Plugin */
 pub struct HexGridPlugin;
