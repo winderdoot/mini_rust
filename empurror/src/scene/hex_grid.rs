@@ -43,6 +43,10 @@ impl HexGridSettings {
     pub fn empire_material(&self, province: &ProvinceType, empire_id: u32) -> Handle<StandardMaterial> {
         self.empire_materials.get(&(province.clone(), empire_id)).unwrap().clone()
     }
+
+    pub fn select_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
+        self.select_materials.get(province).unwrap().clone()
+    }
 }
 
 fn load_color_materials(
@@ -112,7 +116,7 @@ fn create_empire_materials(
                     new_mat.emissive = LinearRgba::from(e.color);
                     // TODO: Add clearcoat to water material
                     let new_handle = materials.add(new_mat);
-                    
+
                     ((p.clone(), e.id), new_handle)
                 })
                 .collect::<HashMap<(ProvinceType, u32), Handle<StandardMaterial>>>()
@@ -200,17 +204,17 @@ pub fn setup_hexgrid(
         &layout
     );
 
-    let mut hover_observer = Observer::new(tile_hover::<Pointer<Over>>);
-    let mut leave_observer = Observer::new(tile_hover::<Pointer<Out>>);
-    let mut select_observer = Observer::new(tile_select);
+    let mut hover_observer = Observer::new(cursor_enter_tile);
+    let mut leave_observer = Observer::new(cursor_exit_tile);
+    let mut select_observer = Observer::new(cursor_select_tile);
 
     let tile_entities: IndexMap<Hex, Entity> = tiles
         .into_iter()
         .map(|(hex, mut pos, province)| {
             let mat = settings.province_material(&province);
-            
+
             /* The prism mesh is extruded along the z axis, we have to translate it and rotate it properly */
-            pos.y -= PRISM_HEIGHT * 0.5; 
+            pos.y -= PRISM_HEIGHT * 0.5;
             let mut transform = Transform::from_translation(pos);
             transform.rotate_axis(Dir3::X, HEX_X_ROT);
             transform.rotate_axis(Dir3::Y, HEX_Y_ROT);
@@ -249,14 +253,23 @@ pub fn hextile_rel_transform(tile: &Transform, rel: &Transform) -> Transform {
 }
 
 
+#[derive(Resource, Debug, Default)]
+pub enum PickedProvince {
+    Hovered(Entity),
+    Selected(Entity),
+    #[default]
+    None
+}
+
 /* Init Plugin */
 pub struct HexGridPlugin;
 
 impl Plugin for HexGridPlugin {
     fn build(&self, app: &mut App) {
         app
+            .init_resource::<PickedProvince>()
             .add_systems(Startup, (
-                load_hexgird_settings, 
+                load_hexgird_settings,
                 setup_hexgrid
             )
             .chain()

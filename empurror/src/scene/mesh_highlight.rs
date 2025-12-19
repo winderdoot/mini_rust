@@ -13,51 +13,124 @@ pub struct Selectable {
     pub selected: bool
 }
 
-pub fn tile_hover<E: EntityEvent>(
-    event: On<E>,
-    mut query: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Highlightable, &Province, Option<&ControlledBy>)>,
-    q_empires: Query<&Empire>,
-    camera_moved: Single<&RecentlyMoved, With<OrbitCamera>>,
-    view_mode: Res<State<GridViewMode>>,
-    settings: Res<HexGridSettings>
-) {
-    let entity = event.event_target();
-    if let Ok((mut material, mut h, prov, empire)) = query.get_mut(entity) {
-        h.highlighted = !h.highlighted;
-
-        if h.highlighted && !camera_moved.0{
-            material.0 = settings.hover_material(&prov.prov_type).clone();
-        }
-        else {
-            let default_mat = 
-            if *view_mode.get() == GridViewMode::Empire && let Some(controlled_by) = empire {
-                let empire_id = q_empires.get(controlled_by.0).unwrap().id;
-                settings.empire_material(&prov.prov_type, empire_id)
-            } 
-            else {
-                settings.province_material(&prov.prov_type)
-            };
-            material.0 = default_mat;
-        }
+fn default_prov_material(
+    province: &Entity,
+    q_provinces: &mut Query<(&mut MeshMaterial3d<StandardMaterial>, &Province, Option<&ControlledBy>)>,
+    q_empires: &Query<&Empire>,
+    view_mode: &Res<State<GridViewMode>>,
+    settings: &Res<HexGridSettings>,
+) -> Option<Handle<StandardMaterial>> {
+    let Ok((_, ty, opt)) = q_provinces.get_mut(*province) else {
+        return None;
+    };
+    if *view_mode.get() == GridViewMode::Empire && let Some(controlled_by) = opt {
+        let Ok(empire) = q_empires.get(controlled_by.0) else {
+            return None;
+        };
+        Some(settings.empire_material(&ty.prov_type, empire.id))
+    }
+    else {
+        Some(settings.province_material(&ty.prov_type))
     }
 }
 
-pub fn tile_select(
-    event: On<Pointer<Press>>,
-    mut query: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Highlightable, &Province, Option<&ControlledBy>)>,
-    q_empires: Query<&Empire>,
+/* I've scrapped the generic system for tile hovering and accepted code duplication, 
+ * because I need more control here over what happens here. */
+
+pub fn cursor_enter_tile(
+    event: On<Pointer<Over>>,
+    mut q_provinces: Query<(&mut MeshMaterial3d<StandardMaterial>, &Province)>,
     camera_moved: Single<&RecentlyMoved, With<OrbitCamera>>,
+    settings: Res<HexGridSettings>,
+    mut picked: ResMut<PickedProvince>
+) {
+    if let PickedProvince::Selected(_) = *picked {
+        return;
+    }
+    if camera_moved.0 {
+        return;
+    }
+
+    /* Change material of entered tile  */
+    let Ok((mut mat, ty)) = q_provinces.get_mut(event.entity) else {
+        return;
+    };
+    mat.0 = settings.hover_material(&ty.prov_type);
+    /* Just hope very hard that the event's come in order and the framerate is high */
+    *picked = PickedProvince::Hovered(event.entity);
+}
+
+pub fn cursor_exit_tile(
+    event: On<Pointer<Out>>,
+    mut q_provinces: Query<(&mut MeshMaterial3d<StandardMaterial>, &Province, Option<&ControlledBy>)>,
+    q_empires: Query<&Empire>,
     view_mode: Res<State<GridViewMode>>,
     settings: Res<HexGridSettings>,
-    hex_grid: ResMut<HexGrid>,
-    mut commands: Commands
+    mut picked: ResMut<PickedProvince>
+) {
+    if let PickedProvince::Selected(_) | PickedProvince::None = *picked {
+        return;
+    }
+
+    /* Change material of exited tile  */
+    let Some(def_mat) = default_prov_material(&event.entity, &mut q_provinces, &q_empires, &view_mode, &settings) else {
+        return;
+    };
+    let Ok((mut mat, _, _)) = q_provinces.get_mut(event.entity) else {
+        return;
+    };
+    mat.0 = def_mat.clone();
+    /* Just hope very hard that the event's come in order and the framerate is high */
+    *picked = PickedProvince::None;
+}
+
+pub fn cursor_select_tile(
+    event: On<Pointer<Press>>,
+    mut q_provinces: Query<(&mut MeshMaterial3d<StandardMaterial>, &Province, Option<&ControlledBy>)>,
+    q_empires: Query<&Empire>,
+    view_mode: Res<State<GridViewMode>>,
+    settings: Res<HexGridSettings>,
+    mut picked: ResMut<PickedProvince>
 ) {
     if event.button != PointerButton::Primary {
         return;
     }
-    /* TODO: Rethink tile hovering. Suck it up, whatever... It's going to be worth it I hope */
+    
+    match *picked {
+        PickedProvince::Hovered(hovered) => {
+            /* Reset the material for the previously hovered tile to default */
+            let Some(def_mat) = default_prov_material(&hovered, &mut q_provinces, &q_empires, &view_mode, &settings) else {
+                return;
+            };
+            let Ok((mut hov_mat, _, _)) = q_provinces.get_mut(hovered) else {
+                return;
+            };
+            hov_mat.0 = def_mat.clone();
+        },
+        PickedProvince::Selected(old_selected) => {
+            /* Deselect the old province and return */
+            let Some(def_mat) = default_prov_material(&old_selected, &mut q_provinces, &q_empires, &view_mode, &settings) else {
+                return;
+            };
+            let Ok((mut old_mat, _, _)) = q_provinces.get_mut(old_selected) else {
+                return;
+            };
+            old_mat.0 = def_mat.clone();
 
-    info!("Selected!");
+            *picked = PickedProvince::None;
+
+            return;
+        },
+        PickedProvince::None => {}
+    };
+
+    /* Change material of selected tile  */
+    let Ok((mut material, ty, _)) = q_provinces.get_mut(event.entity) else {
+        return;
+    };
+    material.0 = settings.select_material(&ty.prov_type);
+    *picked = PickedProvince::Selected(event.entity);
+
 }
 
 pub fn set_empire_materials(

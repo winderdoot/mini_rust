@@ -192,11 +192,24 @@ pub fn add_resource_building(
             commands
                 .entity(building_id)
                 .insert(Farm { level: 1 })
-                .insert(SceneRoot(models.farm.clone()))
+                .insert(SceneRoot(models.farm.clone()));
         },
-        ProvinceType::Woods => commands.entity(building_id).insert(LumberMill { level: 1 }),
-        ProvinceType::Hills => commands.entity(building_id).insert(StoneMine { level: 1 }),
-        ProvinceType::Mountains => commands.entity(building_id).insert(GoldMine { level: 1 }),
+        ProvinceType::Woods => {
+            commands
+                .entity(building_id)
+                .insert(LumberMill { level: 1 })
+                .insert(SceneRoot(models.farm.clone()));
+        },
+        ProvinceType::Hills => {
+            commands
+                .entity(building_id)
+                .insert(StoneMine { level: 1 });
+        },
+        ProvinceType::Mountains => {
+            commands
+                .entity(building_id)
+                .insert(GoldMine { level: 1 });
+        },
         _ => {
             warn!("add_resource_building called on province: {:?}", prov.prov_type);
             return;

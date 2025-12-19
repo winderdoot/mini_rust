@@ -51,7 +51,7 @@ pub fn setup_light(
         CascadeShadowConfigBuilder {
             first_cascade_far_bound: 10.0,
             maximum_distance: 30.0,
-            ..default()
+            ..default() 
         }
         .build(),
     ));

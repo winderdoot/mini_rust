@@ -72,40 +72,14 @@ fn spawn_empires(
     );
 }
 
-// fn add_province_to_empire(
-//     empire: &Entity,
-//     province: &Entity,
-//     commands: &mut Commands,
-//     models: &Res<Models>,
-//     q_transforms: &Query<&Transform, With<Province>>,
-// ) {
-//     let Ok(p_transform) = q_transforms.get(*province) else {
-//         return;
-//     };
-//     let desired = Transform::from_xyz(0.0, 0.5, 0.0);
-//     let transform = hex_grid::hextile_rel_transform(p_transform, &desired);
-    
-//     /* Spawn house */
-//     commands.spawn((
-//         House { population: 0, max_population: 5 },
-//         LocatedIn(*province),
-//         SceneRoot(models.house.clone()),
-//         transform
-//     ));
-//     /* Assign the province to the empire */
-//     commands
-//         .entity(*province)
-//         .insert(ControlledBy(*empire));
-// }
-
 pub fn claim_province(
     event: On<ProvinceClaimed>,
     mut commands: Commands
 ) {
     commands.trigger(HouseAdded { province: event.province });
-    // commands.trigger(HouseAdded { province: event.province });
-    // commands.trigger(HouseAdded { province: event.province });
-    // commands.trigger(ResourceBuildingAdded { province: event.province });
+    commands.trigger(HouseAdded { province: event.province });
+    commands.trigger(HouseAdded { province: event.province });
+    commands.trigger(ResourceBuildingAdded { province: event.province });
 
     /* Assign the province to the empire */
     commands
@@ -151,6 +125,7 @@ fn assign_provinces(
                     
                     true
                 });
+            
             let Some(plains_hex) = plains_neighbor else {
                 continue;
             };
