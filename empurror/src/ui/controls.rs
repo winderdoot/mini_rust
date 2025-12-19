@@ -1,6 +1,6 @@
 use bevy::{prelude::*};
 
-use crate::{game_logic::game_states::GridViewMode, system_sets::*, scene::mesh_highlight::*};
+use crate::{game_logic::{game_states::GridViewMode, province::Province}, scene::{mesh_highlight::*}, system_sets::*};
 
 /* Systems */
 fn toggle_province_view(
@@ -14,6 +14,13 @@ fn toggle_province_view(
             GridViewMode::Empire => next_view.set(GridViewMode::Terrain),
         }
     }
+}
+
+fn unselect_province(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    q_selected: Query<&Selectable, With<Province>>,
+) {
+
 }
 
 /* Init Plugin */

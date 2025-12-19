@@ -4,6 +4,7 @@ use bevy::{
 };
 
 use hexx::{shapes, *};
+use strum::IntoEnumIterator;
 use std::{f32::consts::{PI}, time::*};
 use indexmap::IndexMap;
 use rand::Rng;
@@ -26,6 +27,7 @@ pub struct HexGridSettings {
     pub min_height: f32,
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
     pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
+    pub select_materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
     pub empire_materials: HashMap<(ProvinceType, u32), Handle<StandardMaterial>>
 }
 
@@ -45,125 +47,51 @@ impl HexGridSettings {
 
 fn load_color_materials(
     materials: &mut ResMut<Assets<StandardMaterial>>,
-) -> (HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>) {
-    let mut map = HashMap::<ProvinceType, Handle<StandardMaterial>>::new();
-    let mut hover_map = map.clone();
-    let emission = LinearRgba::rgb(0.2, 0.2, 0.2);
+) -> (HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>) {
+    // let mut hover_map = map.clone();
+    // let mut select_map = map.clone();
+    let hover_emission = LinearRgba::rgb(0.2, 0.2, 0.2);
+    let select_emisson = LinearRgba::rgb(0.4, 0.4, 0.4);
 
-    map.insert(ProvinceType::Water, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(DODGER_BLUE),
-            perceptual_roughness: 0.1,
-            ..Default::default()
-        })
-    );
-    hover_map.insert(ProvinceType::Water, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(DODGER_BLUE),
-            perceptual_roughness: 0.1,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
+    let map: HashMap<ProvinceType, Handle<StandardMaterial>> = ProvinceType::iter()
+        .map(|p| {
+            let handle = materials.add(StandardMaterial {
+                base_color: p.terrain_color(),
+                perceptual_roughness: p.terrain_roughness(),
+                ..Default::default()
+            });
 
-    map.insert(ProvinceType::Hills, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(LIGHT_SLATE_GRAY),
-            perceptual_roughness: 0.6,
-            ..Default::default()
+            (p, handle)
         })
-    );
-    hover_map.insert(ProvinceType::Hills, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(LIGHT_SLATE_GRAY),
-            perceptual_roughness: 0.6,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
-    
+        .collect();
 
-    map.insert(ProvinceType::Desert, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(KHAKI),
-            perceptual_roughness: 0.9,
-            ..Default::default()
-        })
-    );
-    hover_map.insert(ProvinceType::Desert, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(KHAKI),
-            perceptual_roughness: 0.9,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
+    let hover_map: HashMap<ProvinceType, Handle<StandardMaterial>> = ProvinceType::iter()
+        .map(|p| {
+            let handle = materials.add(StandardMaterial {
+                base_color: p.terrain_color(),
+                perceptual_roughness: p.terrain_roughness(),
+                emissive: hover_emission,
+                ..Default::default()
+            });
 
-    map.insert(ProvinceType::Woods, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(SEA_GREEN),
-            perceptual_roughness: 0.8,
-            ..Default::default()
+            (p, handle)
         })
-    );
-    hover_map.insert(ProvinceType::Woods, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(SEA_GREEN),
-            perceptual_roughness: 0.8,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
+        .collect();
 
-    map.insert(ProvinceType::Plains, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(OLIVE_DRAB),
-            perceptual_roughness: 0.9,
-            ..Default::default()
-        })
-    );
-    hover_map.insert(ProvinceType::Plains, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(OLIVE_DRAB),
-            perceptual_roughness: 0.9,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
+    let select_map: HashMap<ProvinceType, Handle<StandardMaterial>> = ProvinceType::iter()
+        .map(|p| {
+            let handle = materials.add(StandardMaterial {
+                base_color: p.terrain_color(),
+                perceptual_roughness: p.terrain_roughness(),
+                emissive: select_emisson,
+                ..Default::default()
+            });
 
-    map.insert(ProvinceType::Mountains, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(WHITE_SMOKE),
-            perceptual_roughness: 0.35,
-            ..Default::default()
+            (p, handle)
         })
-    );
-    hover_map.insert(ProvinceType::Mountains, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(WHITE_SMOKE),
-            perceptual_roughness: 0.35,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
+        .collect();
 
-    map.insert(ProvinceType::BlackSoil, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(YELLOW_950),
-            perceptual_roughness: 0.9,
-            ..Default::default()
-        })
-    );
-    hover_map.insert(ProvinceType::BlackSoil, 
-        materials.add(StandardMaterial {
-            base_color: Color::Srgba(YELLOW_950),
-            perceptual_roughness: 0.9,
-            emissive: emission,
-            ..Default::default()
-        })
-    );
-
-    (map, hover_map)    
+    (map, hover_map, select_map)
 }
 
 fn create_empire_materials(
@@ -198,7 +126,7 @@ pub fn load_hexgird_settings(
     mut materials: ResMut<Assets<StandardMaterial>>,
     empires: Query<&Empire>
 ) {
-    let (material_map, hover_map) = load_color_materials(&mut materials);
+    let (material_map, hover_map, select_map) = load_color_materials(&mut materials);
     let empire_map = create_empire_materials(&material_map, &mut materials, &empires);
 
     commands.insert_resource(HexGridSettings {
@@ -208,7 +136,8 @@ pub fn load_hexgird_settings(
         max_height: MAX_HEIGHT,
         materials: material_map,
         hover_materials: hover_map,
-        empire_materials: empire_map
+        empire_materials: empire_map,
+        select_materials: select_map
     });
 }
 
@@ -273,6 +202,7 @@ pub fn setup_hexgrid(
 
     let mut hover_observer = Observer::new(tile_hover::<Pointer<Over>>);
     let mut leave_observer = Observer::new(tile_hover::<Pointer<Out>>);
+    let mut select_observer = Observer::new(tile_select);
 
     let tile_entities: IndexMap<Hex, Entity> = tiles
         .into_iter()
@@ -286,7 +216,7 @@ pub fn setup_hexgrid(
             transform.rotate_axis(Dir3::Y, HEX_Y_ROT);
 
             let id = commands.spawn((
-                Province { prov_type: province },
+                Province::from_type(&province),
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(mat.clone()),
                 transform
@@ -294,6 +224,7 @@ pub fn setup_hexgrid(
 
             hover_observer.watch_entity(id);
             leave_observer.watch_entity(id);
+            select_observer.watch_entity(id);
 
             (hex, id)
         })
@@ -306,6 +237,7 @@ pub fn setup_hexgrid(
 
     commands.spawn(hover_observer);
     commands.spawn(leave_observer);
+    commands.spawn(select_observer);
 }
 
 /// Cursed function that only exists because my province tiles have incorrectly oriented meshes and it causes all province children to be horribly
@@ -313,9 +245,8 @@ pub fn setup_hexgrid(
 pub fn hextile_rel_transform(tile: &Transform, rel: &Transform) -> Transform {
     let pos = tile.translation + rel.translation;
 
-    Transform::from_translation(pos).with_rotation(rel.rotation)
+    Transform::from_translation(pos).with_rotation(rel.rotation).with_scale(rel.scale)
 }
-
 
 
 /* Init Plugin */

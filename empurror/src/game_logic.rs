@@ -4,4 +4,4 @@ pub mod province_generator;
 pub mod game_states;
 pub mod recently_moved;
 pub mod turns;
-pub mod messages;
+pub mod events;

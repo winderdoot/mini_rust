@@ -1,11 +1,7 @@
-use std::f32::consts::PI;
-
-use bevy::platform::collections::HashSet;
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
 
 use crate::game_logic::province::*;
-use crate::scene::assets::Models;
-use crate::scene::hex_grid::{self, HexGrid};
+use crate::scene::hex_grid::{HexGrid};
 use crate::system_sets::*;
 
 #[derive(Component, Deref)]
@@ -41,6 +37,13 @@ impl Empires {
     }
 }
 
+/* Events */
+#[derive(Event, Debug)]
+pub struct ProvinceClaimed {
+    empire: Entity,
+    province: Entity
+}
+
 
 /* Systems */
 fn spawn_empires(
@@ -69,39 +72,52 @@ fn spawn_empires(
     );
 }
 
-fn add_province_to_empire(
-    empire: &Entity,
-    province: &Entity,
-    commands: &mut Commands,
-    models: &Res<Models>,
-    q_transforms: &Query<&Transform, With<Province>>,
-) {
-    let Ok(p_transform) = q_transforms.get(*province) else {
-        return;
-    };
-    let desired = Transform::from_xyz(0.0, 0.5, 0.0);
-    let transform = hex_grid::hextile_rel_transform(p_transform, &desired);
+// fn add_province_to_empire(
+//     empire: &Entity,
+//     province: &Entity,
+//     commands: &mut Commands,
+//     models: &Res<Models>,
+//     q_transforms: &Query<&Transform, With<Province>>,
+// ) {
+//     let Ok(p_transform) = q_transforms.get(*province) else {
+//         return;
+//     };
+//     let desired = Transform::from_xyz(0.0, 0.5, 0.0);
+//     let transform = hex_grid::hextile_rel_transform(p_transform, &desired);
     
-    /* Spawn house */
-    commands.spawn((
-        House { population: 0, max_population: 5 },
-        LocatedIn(*province),
-        SceneRoot(models.house.clone()),
-        transform
-    ));
+//     /* Spawn house */
+//     commands.spawn((
+//         House { population: 0, max_population: 5 },
+//         LocatedIn(*province),
+//         SceneRoot(models.house.clone()),
+//         transform
+//     ));
+//     /* Assign the province to the empire */
+//     commands
+//         .entity(*province)
+//         .insert(ControlledBy(*empire));
+// }
+
+pub fn claim_province(
+    event: On<ProvinceClaimed>,
+    mut commands: Commands
+) {
+    commands.trigger(HouseAdded { province: event.province });
+    // commands.trigger(HouseAdded { province: event.province });
+    // commands.trigger(HouseAdded { province: event.province });
+    // commands.trigger(ResourceBuildingAdded { province: event.province });
+
     /* Assign the province to the empire */
     commands
-        .entity(*province)
-        .insert(ControlledBy(*empire));
+        .entity(event.province)
+        .insert(ControlledBy(event.empire));
 }
 
 /// Add some starter provinces to each empire
 fn assign_provinces(
     empires: Res<Empires>,
-    q_transforms: Query<&Transform, With<Province>>,
     provinces: Query<&Province>,
     grid: Res<HexGrid>,
-    models: Res<Models>,
     mut commands: Commands
 ) {
     /* Store which provinces we have already assigned to some empire,
@@ -144,28 +160,16 @@ fn assign_provinces(
             assigned.insert(woods_ent);
             assigned.insert(plains_ent);
 
-            add_province_to_empire(empire, plains_ent, &mut commands, &models, &q_transforms);
-            add_province_to_empire(empire, woods_ent, &mut commands, &models, &q_transforms);
+            commands.trigger(ProvinceClaimed { empire: empire.clone(), province: plains_ent.clone() });
+            commands.trigger(ProvinceClaimed { empire: empire.clone(), province: woods_ent.clone() });
+            // add_province_to_empire(&empire, plains_ent, &mut commands, &models, &q_transforms);
+            // add_province_to_empire(&empire, woods_ent, &mut commands, &models, &q_transforms);
             
             break;
         }
     }
 }
 
-fn debug_empire(
-    empires: Res<Empires>,
-    provinces: Query<&Controls>,
-) {
-    let empire = empires.get_entity(0).unwrap();
-    let x = provinces.get(*empire).unwrap();
-
-    info!("empire 0 controls: {} provinces", x.0.len());
-
-    // let empire = empires.get_entity(1).unwrap();
-    // let x = provinces.get(*empire).unwrap();
-
-    // info!("empire 1 controls: {} provinces", x.0.len());
-}
 
 /* Init Plugin */
 pub struct EmpirePlugin {
@@ -181,7 +185,7 @@ impl Plugin for EmpirePlugin {
                 .in_set(StartupSystems::CreateEmpires)
             )
             .add_systems(Startup, 
-                (assign_provinces, debug_empire).chain()
+                assign_provinces
                 .in_set(StartupSystems::AssignEmpireProvinces)
             );
     }

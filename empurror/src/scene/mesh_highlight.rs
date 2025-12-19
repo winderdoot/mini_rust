@@ -1,6 +1,4 @@
-use std::default;
-
-use bevy::{prelude::*};
+use bevy::{picking::backend::HitData, prelude::*};
 
 use crate::game_logic::{empire::{Controls, Empire}, game_states::GridViewMode, province::*, recently_moved::RecentlyMoved};
 use crate::scene::{orbit_camera::OrbitCamera, hex_grid::*};
@@ -8,6 +6,11 @@ use crate::scene::{orbit_camera::OrbitCamera, hex_grid::*};
 #[derive(Component, Default)]
 pub struct Highlightable {
     pub highlighted: bool
+}
+
+#[derive(Component, Default)]
+pub struct Selectable {
+    pub selected: bool
 }
 
 pub fn tile_hover<E: EntityEvent>(
@@ -37,6 +40,24 @@ pub fn tile_hover<E: EntityEvent>(
             material.0 = default_mat;
         }
     }
+}
+
+pub fn tile_select(
+    event: On<Pointer<Press>>,
+    mut query: Query<(&mut MeshMaterial3d<StandardMaterial>, &mut Highlightable, &Province, Option<&ControlledBy>)>,
+    q_empires: Query<&Empire>,
+    camera_moved: Single<&RecentlyMoved, With<OrbitCamera>>,
+    view_mode: Res<State<GridViewMode>>,
+    settings: Res<HexGridSettings>,
+    hex_grid: ResMut<HexGrid>,
+    mut commands: Commands
+) {
+    if event.button != PointerButton::Primary {
+        return;
+    }
+    /* TODO: Rethink tile hovering. Suck it up, whatever... It's going to be worth it I hope */
+
+    info!("Selected!");
 }
 
 pub fn set_empire_materials(

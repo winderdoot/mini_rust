@@ -1,12 +1,11 @@
-use empurror::game_logic::empire::EmpirePlugin;
-use empurror::scene::assets::GameModelsPlugin;
-use empurror::scene::{hex_grid::*, orbit_camera::*};
-use empurror::game_logic::{game_states::*, recently_moved::RecentlyMovedPlugin};
+use empurror::game_logic::{events::GameEventPlugin, empire::EmpirePlugin, game_states::*, recently_moved::RecentlyMovedPlugin};
+use empurror::scene::{assets::GameModelsPlugin, hex_grid::*, orbit_camera::*};
 use empurror::system_sets::*;
 
 use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
 use empurror::ui::controls::UIControlsPlugin;
 use std::f32::consts::{PI};
+
 
 fn main() {
     App::new()
@@ -24,7 +23,8 @@ fn main() {
                 OrbitCameraPlugin,
                 UIControlsPlugin,
                 RecentlyMovedPlugin,
-                EmpirePlugin { empire_count: 1 }
+                GameEventPlugin,
+                EmpirePlugin { empire_count: 5 }
             )
         )
         .add_systems(Startup, setup_light)
