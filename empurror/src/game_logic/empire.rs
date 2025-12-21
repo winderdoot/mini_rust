@@ -4,6 +4,10 @@ use crate::game_logic::province::*;
 use crate::scene::hex_grid::{HexGrid};
 use crate::system_sets::*;
 
+/* Constants */
+pub const MAX_EMPIRES: u32 = 10;
+pub const PLAYER_EMPIRE: u32 = 0;
+
 #[derive(Component, Deref)]
 #[relationship_target(relationship = ControlledBy)]
 pub struct Controls(Vec<Entity>);
@@ -18,7 +22,8 @@ impl Controls {
 #[derive(Component)]
 pub struct Empire {
     pub id: u32, /* 0..empire_count  */
-    pub color: Color
+    pub color: Color,
+    pub name: String
 }
 
 /// Only used a single time, when so that we can insert the number of provinces into the system that spawns them
@@ -28,7 +33,8 @@ pub struct EmpireCount(u32);
 #[derive(Resource)]
 pub struct Empires {
     pub count: u32,
-    pub empire_entity: HashMap<u32, Entity>
+    pub empire_entity: HashMap<u32, Entity>,
+    // pub treasury: 
 }
 
 impl Empires {
@@ -56,7 +62,8 @@ fn spawn_empires(
             let entity = commands.spawn(
                 Empire { 
                     id: i,
-                    color: Hsla::new(empire_hue, 1.0, 0.3, 1.0).into()
+                    color: Hsla::new(empire_hue, 1.0, 0.3, 1.0).into(),
+                    name: format!("Empire {}", i)
                 }
             ).id();
 
@@ -107,7 +114,7 @@ fn assign_provinces(
             if assigned.contains(tile) {
                 continue;
             }
-            if prov.prov_type != ProvinceType::Woods {
+            if prov.ptype != ProvinceType::Woods {
                 continue;
             }
             /* We found a random unowned woods province  */
@@ -119,7 +126,7 @@ fn assign_provinces(
                         return false;
                     };
 
-                    let Ok(ProvinceType::Plains) = provinces.get(*tile).map(|p| &p.prov_type) else {
+                    let Ok(ProvinceType::Plains) = provinces.get(*tile).map(|p| &p.ptype) else {
                         return false;
                     };
                     
@@ -153,8 +160,14 @@ pub struct EmpirePlugin {
 
 impl Plugin for EmpirePlugin {
     fn build(&self, app: &mut App) {
+        let mut empires = self.empire_count;
+        if self.empire_count > MAX_EMPIRES {
+            warn!("Empire count cannot exceed {}", MAX_EMPIRES);
+            empires = MAX_EMPIRES;
+        }
+
         app
-            .insert_resource(EmpireCount(self.empire_count))
+            .insert_resource(EmpireCount(empires))
             .add_systems(Startup, 
                 spawn_empires
                 .in_set(StartupSystems::CreateEmpires)

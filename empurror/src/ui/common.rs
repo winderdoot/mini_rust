@@ -1,6 +1,6 @@
 use bevy::{prelude::*};
 
-use crate::{game_logic::{game_states::GridViewMode, province::Province}, scene::{mesh_highlight::*}, system_sets::*};
+use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, system_sets::*, ui::{panels::*, ui_update::*}};
 
 /* Systems */
 fn toggle_province_view(
@@ -16,22 +16,25 @@ fn toggle_province_view(
     }
 }
 
-fn unselect_province(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    q_selected: Query<&Selectable, With<Province>>,
-) {
-
-}
-
 /* Init Plugin */
-pub struct UIControlsPlugin;
+pub struct GameUIPlugin;
 
-impl Plugin for UIControlsPlugin {
+impl Plugin for GameUIPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_systems(Startup, 
+                (
+                    spawn_province_panel_group,
+                    spawn_treasury_panel
+                )
+                .in_set(StartupSystems::CreateUI)
+            )
             .add_systems(Update, 
-                toggle_province_view
-                .in_set(UpdateSystems::UIControls)
+                (
+                    toggle_province_view,
+                    update_province_panel_group
+                )
+                .in_set(UpdateSystems::UIUpdate)
             )
             .add_systems(OnEnter(GridViewMode::Empire),
                 set_empire_materials

@@ -18,6 +18,20 @@ pub enum ProvinceType {
     Mountains,
 }
 
+impl std::fmt::Display for ProvinceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProvinceType::Water => write!(f, "Water"),
+            ProvinceType::BlackSoil => write!(f, "Black soil"),
+            ProvinceType::Plains => write!(f, "Plains"),
+            ProvinceType::Woods => write!(f, "Woods"),
+            ProvinceType::Desert => write!(f, "Desert"),
+            ProvinceType::Hills => write!(f, "Rocky hills"),
+            ProvinceType::Mountains => write!(f, "Mountains"),
+        }
+    }
+}
+
 impl ProvinceType {
     pub fn terrain_color(&self) -> Color {
         match self {
@@ -50,9 +64,9 @@ impl ProvinceType {
 pub struct ControlledBy(pub Entity);
 
 #[derive(Component)]
-#[require(Highlightable, Selectable)]
+// #[require(Highlightable, Selectable)]
 pub struct Province {
-    pub prov_type: ProvinceType,
+    pub ptype: ProvinceType,
     pub house_count: u32,
     pub resource_building: bool
 }
@@ -60,7 +74,7 @@ pub struct Province {
 impl Province {
     pub fn from_type(t: &ProvinceType) -> Self {
         Self {
-            prov_type: t.clone(),
+            ptype: t.clone(),
             house_count: 0,
             resource_building: false
         }
@@ -76,6 +90,12 @@ pub struct LocatedIn(pub Entity);
 #[relationship_target(relationship = LocatedIn)]
 pub struct ProvinceBuildings(Vec<Entity>);
 
+impl ProvinceBuildings {
+    pub fn get_buildings(&self) -> impl Iterator<Item = &Entity> {
+        self.0.iter()
+    }
+}
+
 
 /* Buildings */
 #[derive(Component, Default)]
@@ -84,8 +104,8 @@ pub struct Building;
 #[derive(Component)]
 #[require(Building)]
 pub struct House {
-    pub population: u32,
-    pub max_population: u32
+    pub residents: u32,
+    pub max_residents: u32
 }
 
 #[derive(Component)]
@@ -132,6 +152,23 @@ pub struct ResourceBuildingAdded {
 }
 
 /* Systems */
+pub fn province_population(
+    q_provinces: &Query<Option<&ProvinceBuildings>>,
+    q_houses: &Query<Option<&House>>,
+    province: &Entity
+) -> u32 {
+
+    let Ok(Some(buildings)) = q_provinces.get(*province) else {
+        return 0;
+    };
+    buildings
+        .get_buildings()
+        .flat_map(|building_ent| q_houses.get(*building_ent))
+        .flatten()
+        .map(|house| house.residents)
+        .sum()
+}
+
 pub fn add_house(
     event: On<HouseAdded>,
     models: Res<Models>,
@@ -160,7 +197,7 @@ pub fn add_house(
     let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
 
     commands.spawn((
-        House { population: 0, max_population: 5 },
+        House { residents: 1, max_residents: 5 },
         LocatedIn(event.province),
         SceneRoot(models.house.clone()),
         transform
@@ -187,7 +224,7 @@ pub fn add_resource_building(
         transform
     )).id();
 
-    match prov.prov_type {
+    match prov.ptype {
         ProvinceType::BlackSoil | ProvinceType::Plains => {
             commands
                 .entity(building_id)
@@ -211,7 +248,7 @@ pub fn add_resource_building(
                 .insert(GoldMine { level: 1 });
         },
         _ => {
-            warn!("add_resource_building called on province: {:?}", prov.prov_type);
+            warn!("add_resource_building called on province: {:?}", prov.ptype);
             return;
         }
     };

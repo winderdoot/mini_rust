@@ -1,4 +1,4 @@
-use bevy::{picking::backend::HitData, prelude::*};
+use bevy::{prelude::*};
 
 use crate::game_logic::{empire::{Controls, Empire}, game_states::GridViewMode, province::*, recently_moved::RecentlyMoved};
 use crate::scene::{orbit_camera::OrbitCamera, hex_grid::*};
@@ -27,10 +27,10 @@ fn default_prov_material(
         let Ok(empire) = q_empires.get(controlled_by.0) else {
             return None;
         };
-        Some(settings.empire_material(&ty.prov_type, empire.id))
+        Some(settings.empire_material(&ty.ptype, empire.id))
     }
     else {
-        Some(settings.province_material(&ty.prov_type))
+        Some(settings.province_material(&ty.ptype))
     }
 }
 
@@ -55,7 +55,7 @@ pub fn cursor_enter_tile(
     let Ok((mut mat, ty)) = q_provinces.get_mut(event.entity) else {
         return;
     };
-    mat.0 = settings.hover_material(&ty.prov_type);
+    mat.0 = settings.hover_material(&ty.ptype);
     /* Just hope very hard that the event's come in order and the framerate is high */
     *picked = PickedProvince::Hovered(event.entity);
 }
@@ -128,7 +128,7 @@ pub fn cursor_select_tile(
     let Ok((mut material, ty, _)) = q_provinces.get_mut(event.entity) else {
         return;
     };
-    material.0 = settings.select_material(&ty.prov_type);
+    material.0 = settings.select_material(&ty.ptype);
     *picked = PickedProvince::Selected(event.entity);
 
 }
@@ -144,7 +144,7 @@ pub fn set_empire_materials(
         .for_each(|(empire, controls)| {
             controls.get_provinces()
                 .for_each(|tile_ent| {
-                    let prov = &q_provinces.get(*tile_ent).unwrap().prov_type;
+                    let prov = &q_provinces.get(*tile_ent).unwrap().ptype;
                     commands
                         .entity(*tile_ent)
                         .insert(MeshMaterial3d(settings.empire_material(prov, empire.id).clone()));
@@ -162,7 +162,7 @@ pub fn set_terrain_materials(
         .for_each(|(tile_ent, p)| {
             commands
                 .entity(tile_ent)
-                .insert(MeshMaterial3d(settings.province_material(&p.prov_type).clone()));
+                .insert(MeshMaterial3d(settings.province_material(&p.ptype).clone()));
         })
 }
 

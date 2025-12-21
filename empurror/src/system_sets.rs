@@ -7,12 +7,13 @@ pub enum StartupSystems {
     CreateHexGrid,
     AssignEmpireProvinces,
     InitTurns,
+    CreateUI,
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum UpdateSystems {
     Camera,
-    UIControls,
+    UIUpdate,
     OnMessage
 }
 
@@ -31,11 +32,12 @@ impl Plugin for SystemSetsPlugin {
                 StartupSystems::CreateEmpires,
                 StartupSystems::CreateHexGrid,
                 StartupSystems::AssignEmpireProvinces,
-                StartupSystems::InitTurns
+                StartupSystems::InitTurns,
+                StartupSystems::CreateUI
             ).chain())
             .configure_sets(Update, (
                 UpdateSystems::Camera,
-                UpdateSystems::UIControls,
+                UpdateSystems::UIUpdate,
                 UpdateSystems::OnMessage
             ));
     }

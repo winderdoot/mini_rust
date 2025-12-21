@@ -5,3 +5,4 @@ pub mod game_states;
 pub mod recently_moved;
 pub mod turns;
 pub mod events;
+pub mod resources;

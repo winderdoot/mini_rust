@@ -3,7 +3,7 @@ use empurror::scene::{assets::GameModelsPlugin, hex_grid::*, orbit_camera::*};
 use empurror::system_sets::*;
 
 use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
-use empurror::ui::controls::UIControlsPlugin;
+use empurror::ui::common::GameUIPlugin;
 use std::f32::consts::{PI};
 
 
@@ -13,7 +13,7 @@ fn main() {
             (
                 /* Bevy built-in plugins */
                 DefaultPlugins,
-                FpsOverlayPlugin::default(),
+                // FpsOverlayPlugin::default(),
                 MeshPickingPlugin,
                 /* Empurror custom plugins */
                 SystemSetsPlugin, /* Manages system sets and their ordering */
@@ -21,7 +21,7 @@ fn main() {
                 HexGridPlugin,
                 GameModelsPlugin,
                 OrbitCameraPlugin,
-                UIControlsPlugin,
+                GameUIPlugin,
                 RecentlyMovedPlugin,
                 GameEventPlugin,
                 EmpirePlugin { empire_count: 5 }
