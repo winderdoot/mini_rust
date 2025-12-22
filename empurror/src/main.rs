@@ -1,6 +1,6 @@
 use empurror::game_logic::{events::GameEventPlugin, empire::EmpirePlugin, game_states::*, recently_moved::RecentlyMovedPlugin};
 use empurror::scene::{assets::GameModelsPlugin, hex_grid::*, orbit_camera::*};
-use empurror::system_sets::*;
+use empurror::game_systems::*;
 
 use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
 use empurror::ui::common::GameUIPlugin;
@@ -16,7 +16,7 @@ fn main() {
                 // FpsOverlayPlugin::default(),
                 MeshPickingPlugin,
                 /* Empurror custom plugins */
-                SystemSetsPlugin, /* Manages system sets and their ordering */
+                GameSystemsPlugin, /* Manages system sets and their ordering */
                 GameStatePlugin,
                 HexGridPlugin,
                 GameModelsPlugin,

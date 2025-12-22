@@ -9,7 +9,7 @@ use std::{f32::consts::{PI}, time::*};
 use indexmap::IndexMap;
 use rand::Rng;
 
-use crate::{game_logic::{empire::{Empire}, province::*, province_generator::*}, scene::mesh_highlight::*, system_sets::StartupSystems};
+use crate::{game_logic::{empire::{Empire}, province::*, province_generator::*}, scene::mesh_highlight::*, game_systems::StartupSystems};
 
 /* Constants */
 pub const HEX_SIZE: f32 = 1.0;

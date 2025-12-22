@@ -21,9 +21,9 @@ use crate::scene::assets::{EmpireAssets, Icons};
 const TPL_PADDING: Val = Val::Px(20.0);
 const PANEL_COLOR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 1.0);
 const PANEL_COLOR_TR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 0.5);
-const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
-const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
-const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
+pub const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
+pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
+pub const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
 
 /* Reource/Component definitions */
 
@@ -42,8 +42,11 @@ pub struct UIProvinceType;
 #[derive(Component)]
 pub struct UIProvincePopulation;
 
-// #[derive(Component)]
-// pub struct UIProvince
+#[derive(Component)]
+pub struct UIClaimProvincePanel;
+
+#[derive(Component)]
+pub struct ClaimProvinceButton;
 
 
 #[derive(Component)]
@@ -72,6 +75,7 @@ pub struct BuildResourceBuildingButton;
 fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
     (
         Node {
+            display: Display::None,
             width: auto(),
             height: auto(),
             position_type: PositionType::Relative,
@@ -309,16 +313,54 @@ fn province_detail_panel() -> impl Bundle {
     container
 }
 
+fn claim_province_button() -> impl Bundle {
+    (
+        Node {
+            border: UiRect::all(px(2)),
+            padding: UiRect::all(px(5)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        ClaimProvinceButton,
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        BorderColor::all(Color::WHITE),
+        BorderRadius::all(px(15)),
+        BackgroundColor(BUTTON_COLOR),
+        children![(
+            Text::new("Claim Province"),
+            TextFont {
+                font_size: 22.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )],
+    )
+}
+
+fn province_claim_panel() -> impl Bundle {
+    let container = (
+        UIClaimProvincePanel,
+        claim_province_button()
+    );
+
+    container
+}
+
 pub fn spawn_province_panel_group(
     empire_assets: Res<EmpireAssets>,
     mut commands: Commands
 ) {
     let hover = province_hover_panel(&empire_assets);
     let detail = province_detail_panel();
+    let claim = province_claim_panel();
 
     let container = (
         UIProvincePanel,
         Node {
+            display: Display::None,
             width: auto(),
             height: auto(),
             position_type: PositionType::Absolute,
@@ -333,7 +375,8 @@ pub fn spawn_province_panel_group(
         },
         children![
             hover,
-            detail
+            detail,
+            claim
         ]
     );
 

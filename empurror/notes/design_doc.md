@@ -1,13 +1,21 @@
 ## TODO
 
-1. Control privinces
+1. Control privinces **DONE**
 - Separate view for provinces controlled by your/other emipires
 - Add emipire components/entities
-- Add hardcoded number of empires and a few provinces controlled by the player empire
+- Add hardcoded number of empires and a few provinces controlled by the player empire 
 
-2. Add turn mechanic, make the other empires skip their turn
+SKIP: 2. Add turn mechanic, make the other empires skip their turn
 
-3. Empire resources:
+Gameplay:
+- suport selecting a hovered tile, and deselecting it
+
+UI:
+- panel that appears when a tile is hovered/selected
+- for hover less info?
+
+Once ui exists and houses can be built on tiles:
+- Add population
 - Add food, stone, wood, gold and population resources (how to implement them?)
 - Make systems for counting the total and income for next turn
 

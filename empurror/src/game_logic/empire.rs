@@ -2,7 +2,7 @@ use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
 
 use crate::game_logic::province::*;
 use crate::scene::hex_grid::{HexGrid};
-use crate::system_sets::*;
+use crate::game_systems::*;
 
 /* Constants */
 pub const MAX_EMPIRES: u32 = 10;
@@ -41,17 +41,23 @@ impl Empires {
     pub fn get_entity(&self, empire_id: u32) -> Option<&Entity> {
         self.empire_entity.get(&empire_id)
     }
+
+    pub fn player_empire(&self) -> Option<&Entity> {
+        self.empire_entity.get(&PLAYER_EMPIRE)
+    }
 }
 
 /* Events */
 #[derive(Event, Debug)]
 pub struct ProvinceClaimed {
-    empire: Entity,
-    province: Entity
+    pub empire: Entity,
+    pub province: Entity
 }
 
 
 /* Systems */
+// pub fn province
+
 fn spawn_empires(
     mut commands: Commands,
     count: Res<EmpireCount>
@@ -83,8 +89,6 @@ pub fn claim_province(
     event: On<ProvinceClaimed>,
     mut commands: Commands
 ) {
-    commands.trigger(HouseAdded { province: event.province });
-    commands.trigger(HouseAdded { province: event.province });
     commands.trigger(HouseAdded { province: event.province });
     commands.trigger(ResourceBuildingAdded { province: event.province });
 

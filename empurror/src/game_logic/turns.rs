@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{game_logic::empire::Empires, system_sets::StartupSystems};
+use crate::{game_logic::empire::Empires, game_systems::StartupSystems};
 
 #[derive(Resource)]
 pub struct Turns {

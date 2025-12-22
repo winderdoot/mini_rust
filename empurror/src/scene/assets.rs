@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{game_logic::empire::MAX_EMPIRES, system_sets::StartupSystems};
+use crate::{game_logic::empire::MAX_EMPIRES, game_systems::StartupSystems};
 
 #[derive(Resource, Default)]
 pub struct Models {

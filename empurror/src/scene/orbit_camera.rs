@@ -3,7 +3,7 @@ use std::f32::consts::{FRAC_PI_2};
 use std::ops::Range;
 use std::cmp::*;
 
-use crate::{game_logic::recently_moved::*, system_sets::UpdateSystems};
+use crate::{game_logic::recently_moved::*, game_systems::UpdateSystems};
 
 #[derive(Resource)]
 pub struct CameraSettings {

@@ -1,6 +1,7 @@
 use bevy::{prelude::*};
+use bevy_ui_widgets::UiWidgetsPlugins;
 
-use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, system_sets::*, ui::{panels::*, ui_update::*}};
+use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, ui_update::*}};
 
 /* Systems */
 fn toggle_province_view(
@@ -22,6 +23,7 @@ pub struct GameUIPlugin;
 impl Plugin for GameUIPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(UiWidgetsPlugins)
             .add_systems(Startup, 
                 (
                     spawn_province_panel_group,
@@ -32,7 +34,9 @@ impl Plugin for GameUIPlugin {
             .add_systems(Update, 
                 (
                     toggle_province_view,
-                    update_province_panel_group
+                    update_province_panel_group,
+                    update_claim_button,
+                    update_claim_button_depress
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )
