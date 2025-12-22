@@ -58,6 +58,27 @@ impl ProvinceType {
             ProvinceType::Mountains => 0.35,
         }
     }
+
+    pub fn resource_building_cost(&self) -> HashMap<ResourceType, f32> {
+        match self {
+            ProvinceType::BlackSoil | ProvinceType::Plains => {
+                [(ResourceType::Lumber, 10.0)].into()
+            },
+            ProvinceType::Woods => {
+                [(ResourceType::Lumber, 15.0)].into()
+            },
+            ProvinceType::Hills => {
+                [(ResourceType::Lumber, 20.0)].into()
+            },
+            ProvinceType::Mountains => {
+                [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into()
+            },
+            _ => {
+                error!("Invalid province type");
+                return Default::default();
+            }
+        }
+    }
 }
 
 #[derive(Component)]
@@ -176,6 +197,12 @@ pub struct House {
     pub max_residents: u32
 }
 
+impl House {
+    pub fn build_cost() -> HashMap<ResourceType, f32> {
+        [(ResourceType::Lumber, 5.0)].into()
+    }
+}
+
 #[derive(Component)]
 pub enum SpecialBuilding {
     Farm,
@@ -204,6 +231,16 @@ impl SpecialBuilding {
                 return [(ResourceType::Gold, workers as f32 * 3.0)].into();
             },
             _ => Default::default()
+        }
+    }
+
+    pub fn build_cost(&self) -> HashMap<ResourceType, f32> {
+        match self {
+            SpecialBuilding::Farm => ProvinceType::Plains.resource_building_cost(),
+            SpecialBuilding::LumberMill => ProvinceType::Woods.resource_building_cost(),
+            SpecialBuilding::StoneMine => ProvinceType::Hills.resource_building_cost(),
+            SpecialBuilding::GoldMine => ProvinceType::Mountains.resource_building_cost(),
+            SpecialBuilding::Castle => panic!("I dunno yet lmao"),
         }
     }
 }

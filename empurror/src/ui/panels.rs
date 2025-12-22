@@ -10,9 +10,7 @@ use bevy::{
     ui::{Checked, InteractionDisabled, Pressed},
 };
 
-use bevy_ui_widgets::{checkbox_self_update, observe, Activate, Button, Checkbox, CoreSliderDragState,
-        RadioButton, RadioGroup, Slider, SliderRange, SliderThumb, SliderValue, TrackClick,
-        UiWidgetsPlugins, ValueChange};
+use bevy_ui_widgets::{Button};
 
 
 use crate::game_logic::resources::ResourceType;
@@ -34,6 +32,8 @@ pub struct UIDetailedProvincePanel;
 #[derive(Component)]
 pub struct UIBasicProvincePanel;
 #[derive(Component)]
+
+/* Basic panel  */
 pub struct UIProvinceFlag;
 #[derive(Component)]
 pub struct UIProvinceEmpireName;
@@ -42,34 +42,34 @@ pub struct UIProvinceType;
 #[derive(Component)]
 pub struct UIProvincePopulation;
 
+/* Claim panel */
 #[derive(Component)]
 pub struct UIClaimProvincePanel;
-
 #[derive(Component)]
 pub struct ClaimProvinceButton;
 
-
+/* Treasury */
 #[derive(Component)]
 pub struct TreasuryPanel;
 
-#[derive(Component)]
-pub enum UIResource {
-    Resource { 
-        rtype: ResourceType,
-        total: f32,
-        incomde: f32
-    },
-    Population {
-        total: u32,
-        incomde: u32
-    }
-}
 
+/* Detail panel */
 #[derive(Component)]
 pub struct BuildHouseButton;
-
 #[derive(Component)]
 pub struct BuildResourceBuildingButton;
+#[derive(Component)]
+pub struct UIProductionText;
+#[derive(Component)]
+pub struct UIUpkeepText;
+#[derive(Component)]
+pub struct UIHousesText;
+#[derive(Component)]
+pub struct UIBuildHouseText;
+#[derive(Component)]
+pub struct UIBuildResourceBuildingText;
+#[derive(Component)]
+pub struct UIResidentsText;
 /* Systems */
 
 fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
@@ -236,6 +236,7 @@ fn province_detail_panel() -> impl Bundle {
         },
         children![
             (
+                UIProductionText,
                 Text::new(production),
                 TextFont { 
                    font_size: 18.0,
@@ -245,6 +246,7 @@ fn province_detail_panel() -> impl Bundle {
                 TextLayout::new_with_justify(Justify::Left),
             ),
             (
+                UIUpkeepText,
                 Text::new(upkeep),
                 TextFont { 
                    font_size: 18.0,
@@ -256,6 +258,7 @@ fn province_detail_panel() -> impl Bundle {
         ]
     );
     let houses = (
+        UIHousesText,
         Text::new("Houses: 3/3"),
         TextFont { 
             font_size: 18.0,
@@ -288,6 +291,7 @@ fn province_detail_panel() -> impl Bundle {
         },
         children![
             (
+                UIResidentsText,
                 Text::new("Assign residents:\n- 4/5 +"),
                 TextFont { 
                    font_size: 18.0,

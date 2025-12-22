@@ -36,7 +36,7 @@ impl Plugin for GameUIPlugin {
                     toggle_province_view,
                     update_province_panel_group,
                     update_claim_button,
-                    update_claim_button_depress
+                    update_build_house_button,
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )

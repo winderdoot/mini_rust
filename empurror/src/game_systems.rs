@@ -52,7 +52,9 @@ pub struct GameSystemsPlugin;
  * to specific game systems. */
 impl Plugin for GameSystemsPlugin {
     fn build(&self, app: &mut App) {
-        let game_systems = GameSystems::new();
+        let game_systems = GameSystems::new()
+            .add(stringify!(update_claim_button), app.register_system(update_claim_button))
+            .add(stringify!(update_build_house_button), app.register_system(update_build_house_button));
 
         app
             .insert_resource(game_systems)
