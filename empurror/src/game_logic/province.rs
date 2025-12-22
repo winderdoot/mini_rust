@@ -1,11 +1,13 @@
-use bevy::{prelude::*, color::palettes::{tailwind::*, css::*}};
-use std::{cmp::Eq, f32::consts::PI};
+use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMap, prelude::*};
+use std::{cmp::{Eq, min}, f32::consts::PI};
 // use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
-use crate::game_logic::empire::Controls;
+use crate::game_logic::{empire::Controls, resources::ResourceType};
 use crate::scene::assets::Models;   
 use crate::scene::{hex_grid, mesh_highlight::*};
+
+pub const MAX_HOUSES: u32 = 3;
 
 #[derive(Hash, Debug, PartialEq, Eq, Clone, EnumIter)]
 pub enum ProvinceType {
@@ -58,17 +60,15 @@ impl ProvinceType {
     }
 }
 
-/* Source of truth in the ControlledBy <-> Controls relationship */
-#[derive(Component, Deref)]
-#[relationship(relationship_target = Controls)]
-pub struct ControlledBy(pub Entity);
-
 #[derive(Component)]
-// #[require(Highlightable, Selectable)]
 pub struct Province {
     pub ptype: ProvinceType,
-    pub house_count: u32,
-    pub resource_building: bool
+    house_count: u32,
+    pops: u32,
+    max_pops: u32,
+    upkeep: HashMap<ResourceType, f32>,
+    income: HashMap<ResourceType, f32>,
+    pops_income: u32,
 }
 
 impl Province {
@@ -76,10 +76,84 @@ impl Province {
         Self {
             ptype: t.clone(),
             house_count: 0,
-            resource_building: false
+            pops: 1,
+            max_pops: 0,
+            upkeep: Default::default(),
+            income: Default::default(),
+            pops_income: 0,
+        }
+    }
+
+    pub fn get_houses(&self) -> u32 {
+        self.house_count
+    }
+
+    pub fn get_pops(&self) -> u32 {
+        self.pops
+    }
+
+    pub fn get_max_pops(&self) -> u32 {
+        self.max_pops
+    }
+
+    pub fn get_upkeep(&self) -> &HashMap<ResourceType, f32> {
+        &self.upkeep
+    }
+
+    pub fn get_income(&self) -> &HashMap<ResourceType, f32> {
+        &self.income
+    }
+
+    pub fn get_pops_income(&self) -> u32 {
+        self.pops_income
+    }
+
+    fn upkeep(&self) -> HashMap<ResourceType, f32> {
+        let pop_cost = match self.ptype {
+            ProvinceType::Water => {
+                error!("Water province can't be owned");
+                return HashMap::new();
+            },
+            ProvinceType::BlackSoil => 1.0,
+            ProvinceType::Plains => 1.0,
+            ProvinceType::Woods => 1.25,
+            ProvinceType::Desert => 4.0,
+            ProvinceType::Hills => 2.25,
+            ProvinceType::Mountains => 3.5,
+        };
+        let food_cost = pop_cost * (self.pops as f32);
+
+        return HashMap::from([(ResourceType::Grain, food_cost)]);
+    }
+
+    fn base_income(&self) -> HashMap<ResourceType, f32> {
+        match self.ptype {
+            ProvinceType::BlackSoil => {
+                return [(ResourceType::Grain, self.pops as f32 * 2.25)].into();
+            },
+            ProvinceType::Plains => {
+                return [(ResourceType::Grain, self.pops as f32 * 1.5)].into();
+            },
+            ProvinceType::Woods => {
+                return [(ResourceType::Lumber, self.pops as f32 * 1.5)].into();
+            },
+            ProvinceType::Hills => {
+                return [(ResourceType::Stone, self.pops as f32 * 1.0)].into();
+            },
+            ProvinceType::Mountains => {
+                return [(ResourceType::Gold, self.pops as f32 * 1.0)].into();
+            },
+            _ => Default::default()
         }
     }
 }
+
+/* Relationships */
+
+/* Source of truth in the ControlledBy <-> Controls relationship */
+#[derive(Component, Deref)]
+#[relationship(relationship_target = Controls)]
+pub struct ControlledBy(pub Entity);
 
 /* Source of truth in LocatedIn <-> ProvinceBuildings  */
 #[derive(Component, Deref)]
@@ -96,48 +170,43 @@ impl ProvinceBuildings {
     }
 }
 
-
 /* Buildings */
-#[derive(Component, Default)]
-pub struct Building;
-
 #[derive(Component)]
-#[require(Building)]
 pub struct House {
-    pub residents: u32,
     pub max_residents: u32
 }
 
 #[derive(Component)]
-#[require(Building)]
-pub struct Farm {
-    pub level: u32
+pub enum SpecialBuilding {
+    Farm,
+    LumberMill,
+    StoneMine,
+    GoldMine,
+    Castle
 }
 
-#[derive(Component)]
-#[require(Building)]
-pub struct StoneMine {
-    pub level: u32
+impl SpecialBuilding {
+    pub fn income(&self, ptype: &ProvinceType, workers: u32) -> HashMap<ResourceType, f32> {
+        match ptype {
+            ProvinceType::BlackSoil => {
+                return [(ResourceType::Grain, workers as f32 * 6.0)].into();
+            },
+            ProvinceType::Plains => {
+                return [(ResourceType::Grain, workers as f32 * 3.0)].into();
+            },
+            ProvinceType::Woods => {
+                return [(ResourceType::Lumber, workers as f32 * 4.0)].into();
+            },
+            ProvinceType::Hills => {
+                return [(ResourceType::Stone, workers as f32 * 3.0)].into();
+            },
+            ProvinceType::Mountains => {
+                return [(ResourceType::Gold, workers as f32 * 3.0)].into();
+            },
+            _ => Default::default()
+        }
+    }
 }
-
-#[derive(Component)]
-#[require(Building)]
-pub struct LumberMill {
-    pub level: u32
-}
-
-#[derive(Component)]
-#[require(Building)]
-pub struct GoldMine {
-    pub level: u32
-}
-
-#[derive(Component)]
-#[require(Building)]
-pub struct Castle {
-    pub level: u32
-}
-
 
 /* Building events  */
 #[derive(Event, Debug)]
@@ -147,26 +216,56 @@ pub struct HouseAdded {
 
 /* Building type is deduced based on the province type */
 #[derive(Event, Debug)]
-pub struct ResourceBuildingAdded {
+pub struct SpecialBuildingAdded {
     pub province: Entity,
+}
+/// Used to recalculate province upkeep/production/population
+#[derive(Event, Debug)]
+pub struct ProvinceIncomeChanged {
+    pub province: Entity
 }
 
 /* Systems */
-pub fn province_population(
-    q_provinces: &Query<Option<&ProvinceBuildings>>,
-    q_houses: &Query<Option<&House>>,
-    province: &Entity
-) -> u32 {
-
-    let Ok(Some(buildings)) = q_provinces.get(*province) else {
-        return 0;
+// Recalculate all province income/upkeep values
+pub fn calculate_province_income(
+    event: On<ProvinceIncomeChanged>,
+    mut q_provinces: Query<(&mut Province, &ProvinceBuildings)>,
+    q_houses: Query<&House>,
+    q_special_buldings: Query<&SpecialBuilding>
+) {
+    let Ok((mut p, buildings)) = q_provinces.get_mut(event.province) else {
+        return;
     };
+    p.max_pops = 0;
+    p.income = HashMap::new();
+    
+    /* Applied only if there is no resource building */
+    let mut building_income = HashMap::<ResourceType, f32>::new();
+
     buildings
         .get_buildings()
-        .flat_map(|building_ent| q_houses.get(*building_ent))
-        .flatten()
-        .map(|house| house.residents)
-        .sum()
+        .for_each(|building| {
+            if let Ok(btype) = q_special_buldings.get(*building) {
+                building_income.extend(btype.income(&p.ptype, p.pops));
+            }
+            else {
+                let Ok(house) = q_houses.get(*building) else {
+                    error!("Invalid building entity");
+                    return;
+                };
+                p.max_pops += house.max_residents;
+            }
+        });
+
+    p.upkeep = p.upkeep();
+    p.pops_income = min(2, p.max_pops - p.pops);
+
+    p.income =  
+    if building_income.is_empty() {
+        p.base_income()
+    } else {
+        building_income
+    };
 }
 
 pub fn add_house(
@@ -197,7 +296,7 @@ pub fn add_house(
     let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
 
     commands.spawn((
-        House { residents: 1, max_residents: 5 },
+        House { max_residents: 5 },
         LocatedIn(event.province),
         SceneRoot(models.house.clone()),
         transform
@@ -206,7 +305,7 @@ pub fn add_house(
 
 
 pub fn add_resource_building(
-    event: On<ResourceBuildingAdded>,
+    event: On<SpecialBuildingAdded>,
     models: Res<Models>,
     mut q_provinces: Query<(&Transform, &mut Province)>,
     mut commands: Commands,
@@ -219,39 +318,29 @@ pub fn add_resource_building(
     let desired = Transform::from_translation(transl);
     let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
     
-    let building_id = commands.spawn((
-        LocatedIn(event.province),
-        transform
-    )).id();
-
-    match prov.ptype {
+    let (model, building_type) = match prov.ptype {
         ProvinceType::BlackSoil | ProvinceType::Plains => {
-            commands
-                .entity(building_id)
-                .insert(Farm { level: 1 })
-                .insert(SceneRoot(models.farm.clone()));
+            (models.farm.clone(), SpecialBuilding::Farm)
         },
         ProvinceType::Woods => {
-            commands
-                .entity(building_id)
-                .insert(LumberMill { level: 1 })
-                .insert(SceneRoot(models.farm.clone()));
+            (models.farm.clone(), SpecialBuilding::LumberMill)
         },
         ProvinceType::Hills => {
-            commands
-                .entity(building_id)
-                .insert(StoneMine { level: 1 });
+            (models.farm.clone(), SpecialBuilding::StoneMine)
         },
         ProvinceType::Mountains => {
-            commands
-                .entity(building_id)
-                .insert(GoldMine { level: 1 });
+            (models.farm.clone(), SpecialBuilding::GoldMine)
         },
         _ => {
-            warn!("add_resource_building called on province: {:?}", prov.ptype);
+            warn!("add_resource_building called on {:?} province type", prov.ptype);
             return;
         }
     };
+
+    let building_id = commands.spawn((
+        LocatedIn(event.province),
+        building_type,
+        SceneRoot(model),
+        transform
+    )).id();
 }
-
-

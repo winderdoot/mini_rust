@@ -11,12 +11,12 @@ pub struct Turns {
 
 /// Used to mark the end of a turn, so that empire actions can be calculated and have proper effect.
 /// A NewTurn message is supposed to be emitted afterwards
-#[derive(Message, Debug)]
+#[derive(Event, Debug)]
 pub struct EndTurn {
     pub empire_id: u32
 }
 
-#[derive(Message, Debug)]
+#[derive(Event, Debug)]
 pub struct NewTurn {
     pub empire_id: u32
 }

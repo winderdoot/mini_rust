@@ -1,12 +1,12 @@
 use bevy::{picking::hover::Hovered, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::{Controls, Empire, Empires, PLAYER_EMPIRE, ProvinceClaimed}, province::*}, game_systems::GameSystems, scene::{assets::EmpireAssets, hex_grid::{HexGrid, PickedProvince}}, ui::panels::*};
+use crate::{game_logic::{empire::*, province::*}, game_systems::GameSystems, scene::{assets::*, hex_grid::*}, ui::panels::*};
 
 /// Horrible, horrible code
 fn update_basic_province_panel(
     province_ent: &Entity,
     q_provinces: &Query<(&Province, Option<&ControlledBy>, Option<&ProvinceBuildings>)>,
-    q_houses: &Query<Option<&House>>,
+    _: &Query<Option<&House>>,
     q_empires: &Query<(&Empire, &Controls)>,
     empire_assets: &Res<EmpireAssets>,
     nodes: &mut ParamSet<(
@@ -22,7 +22,7 @@ fn update_basic_province_panel(
         Single<&mut Text, With<UIProvincePopulation>>,
     )>,
 ) {
-    let Ok((p_prov, controlled_by, buildings)) = q_provinces.get(*province_ent) else {
+    let Ok((p_prov, controlled_by, _)) = q_provinces.get(*province_ent) else {
         return;
     };
     let tpl = &mut *nodes.p0();
@@ -68,22 +68,70 @@ fn update_basic_province_panel(
     p_type.0 = format!("{}", p_prov.ptype);
     let p_population = &mut *text.p2();
 
-    let pops = 
-    if let Some(buildings) = buildings {
-        buildings
-            .get_buildings()
-            .flat_map(|building_ent| q_houses.get(*building_ent))
-            .flatten()
-            .map(|house| house.residents)
-            .sum()
-    } else {
-        0
-    };
-
-    p_population.0 = format!("Population: {}", pops); // TODO CALCULATE POPS
+    p_population.0 = format!("Population: {}", p_prov.get_pops()); // TODO CALCULATE POPS
 }
 
-/* Terrible  */
+fn update_claims_button(
+    province: &Entity,
+    q_provinces: &Query<(&Province, Option<&ControlledBy>, Option<&ProvinceBuildings>)>,
+    q_prov_trans: &Query<&Transform, With<Province>>,
+    q_prov_owner: &Query<&ControlledBy, With<Province>>,
+    empires: Res<Empires>,
+    mut nodes: ParamSet<(
+        Single<&mut Node, With<UIProvincePanel>>,
+        Single<&mut Node, With<UIBasicProvincePanel>>,
+        Single<&mut Node, With<UIDetailedProvincePanel>>,
+        Single<(&mut Node, &mut ImageNode), With<UIProvinceFlag>>,
+        Single<&mut Node, With<UIClaimProvincePanel>>
+    )>,
+    grid: Res<HexGrid>,
+) {
+    let Ok((_, controlled_by, _)) = q_provinces.get(*province) else {
+        return;
+    };
+
+    let Some(_) = controlled_by else {
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Player empire not found!");
+            return;
+        };
+    let Ok(t) = q_prov_trans.get(*province) else {
+        return;
+    };
+    let hex = grid.layout.world_pos_to_hex(Vec2::new(t.translation.x, t.translation.z));
+    let is_adjacent_non_water = hex
+        .all_neighbors()
+        .iter()
+        .any(|h| {
+            let Some(ent) = grid.get_entity(h) else {
+                return false;
+            };
+            let Ok((p, _, _)) = q_provinces.get(*ent) else {
+                return false;
+            };
+            if let ProvinceType::Water = p.ptype {
+                return false;
+            }
+            let Ok(owner) = q_prov_owner.get(*ent) else {
+                return false;
+            };
+            return owner.0 == *player_empire;
+        });
+    
+    if !is_adjacent_non_water {
+        return;
+    }
+
+    /* TODO: Check if we have enough resources */
+
+    let claims = &mut *nodes.p4();
+    claims.display = Display::Flex;
+    
+    return;
+    };
+}
+
+/* Terrible code, I am in tears  */
 pub fn update_province_panel_group(
     picked: Res<PickedProvince>,
     q_provinces: Query<(&Province, Option<&ControlledBy>, Option<&ProvinceBuildings>)>,
@@ -105,7 +153,7 @@ pub fn update_province_panel_group(
         Single<&mut Text, With<UIProvinceType>>,
         Single<&mut Text, With<UIProvincePopulation>>,
     )>,
-    grid: Res<HexGrid>
+    grid: Res<HexGrid>,
 ) {
     match *picked {
         PickedProvince::None => {
@@ -117,7 +165,7 @@ pub fn update_province_panel_group(
         },
         PickedProvince::Selected(selected) => {
             update_basic_province_panel(&selected, &q_provinces, &q_houses, &q_empire, &empire_assets, &mut nodes, &mut text);
-            let Ok((p_prov, controlled_by, buildings)) = q_provinces.get(selected) else {
+            let Ok((_, controlled_by, _)) = q_provinces.get(selected) else {
                 return;
             };
             /* Claim province button */
@@ -130,37 +178,45 @@ pub fn update_province_panel_group(
                     return;
                 };
                 let hex = grid.layout.world_pos_to_hex(Vec2::new(t.translation.x, t.translation.z));
-                let is_adjacent = hex
+                let is_adjacent_non_water = hex
                     .all_neighbors()
                     .iter()
                     .any(|h| {
                         let Some(ent) = grid.get_entity(h) else {
                             return false;
                         };
+                        let Ok((p, _, _)) = q_provinces.get(*ent) else {
+                            return false;
+                        };
+                        if let ProvinceType::Water = p.ptype {
+                            return false;
+                        }
                         let Ok(owner) = q_prov_owner.get(*ent) else {
                             return false;
                         };
                         return owner.0 == *player_empire;
                     });
                 
-                if !is_adjacent {
+                if !is_adjacent_non_water {
                     return;
                 }
 
+                /* TODO: Check if we have enough resources */
+
                 let claims = &mut *nodes.p4();
                 claims.display = Display::Flex;
-
-                /* TODO: Check if we have enough resources */
+                
                 return;
             };
-            let Ok((empire_c, controls)) = q_empire.get(controlled_by.0) else {
+            let Ok((empire_c, _)) = q_empire.get(controlled_by.0) else {
                 return;
             };
             if empire_c.id != PLAYER_EMPIRE {
                 return;
             }
             /* Display/modify detailed province panel */
-                
+            
+            /* This function is too long. Call event to update and enable the detailed province panel. */
             let detailed = &mut *nodes.p2();
             detailed.display = Display::Flex;
         },
@@ -248,6 +304,9 @@ pub fn update_claim_button(
         /* Manually remove the pressed component, to avoid race condition where the button would disappear before it could unpress itself */
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(ProvinceClaimed { empire: *player_empire, province });
+        commands.trigger(ProvinceIncomeChanged { province });
+        commands.trigger(ResourceIncomeChanged);
+        commands.trigger(PopsIncomeChanged);
     }
 }
 

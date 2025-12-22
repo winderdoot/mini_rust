@@ -1,6 +1,6 @@
 use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
 
-use crate::game_logic::province::*;
+use crate::game_logic::{province::*, resources::ResourceType};
 use crate::scene::hex_grid::{HexGrid};
 use crate::game_systems::*;
 
@@ -23,7 +23,29 @@ impl Controls {
 pub struct Empire {
     pub id: u32, /* 0..empire_count  */
     pub color: Color,
-    pub name: String
+    pub name: String,
+
+    /* Treasury */
+    pub resource_total: HashMap<ResourceType, f32>,
+    pub resource_income: HashMap<ResourceType, f32>,
+    pub pops_total: u32,
+    pub pops_free: u32,
+    pub pops_income: u32,
+}
+
+impl Empire {
+    pub fn new(id: u32, color: Color, name: String) -> Self {
+        Empire {
+            id,
+            color,
+            name,
+            resource_total: Default::default(),
+            resource_income: Default::default(),
+            pops_total: 2,
+            pops_free: 0,
+            pops_income: 0
+        }
+    }
 }
 
 /// Only used a single time, when so that we can insert the number of provinces into the system that spawns them
@@ -33,8 +55,7 @@ pub struct EmpireCount(u32);
 #[derive(Resource)]
 pub struct Empires {
     pub count: u32,
-    pub empire_entity: HashMap<u32, Entity>,
-    // pub treasury: 
+    pub empire_entity: HashMap<u32, Entity>
 }
 
 impl Empires {
@@ -54,9 +75,39 @@ pub struct ProvinceClaimed {
     pub province: Entity
 }
 
+#[derive(Event, Debug)]
+pub struct ResourceIncomeChanged;
+#[derive(Event, Debug)]
+pub struct PopsIncomeChanged;
 
 /* Systems */
-// pub fn province
+pub fn calculate_empire_resource_income(
+    event: On<ResourceIncomeChanged>,
+    empires: Res<Empires>,
+    q_provinces: Query<(&Province, Option<&ProvinceBuildings>, &ControlledBy)>
+) {
+    // let Some(player_empire) = empires.player_empire() else {
+    //     error!("Player empire missing");
+    //     return;
+    // };
+    // q_provinces
+    //     .iter()
+    //     .filter(|(p, buildings, owner)| owner.0 == player_empire)
+}
+
+pub fn calculate_empire_pops_income(
+    event: On<PopsIncomeChanged>,
+    empires: Res<Empires>,
+    q_provinces: Query<(&Province, Option<&ProvinceBuildings>, &ControlledBy)>
+) {
+    // let Some(player_empire) = empires.player_empire() else {
+    //     error!("Player empire missing");
+    //     return;
+    // };
+    // q_provinces
+    //     .iter()
+    //     .filter(|(p, buildings, owner)| owner.0 == player_empire)
+}
 
 fn spawn_empires(
     mut commands: Commands,
@@ -66,11 +117,11 @@ fn spawn_empires(
         .map(|i| {
             let empire_hue = 0.0.lerp(360.0, (i as f32) / (count.0 as f32));
             let entity = commands.spawn(
-                Empire { 
-                    id: i,
-                    color: Hsla::new(empire_hue, 1.0, 0.3, 1.0).into(),
-                    name: format!("Empire {}", i)
-                }
+                Empire::new (
+                    i,
+                    Hsla::new(empire_hue, 1.0, 0.3, 1.0).into(),
+                    format!("Empire {}", i)
+                )
             ).id();
 
             (i, entity)
@@ -90,7 +141,7 @@ pub fn claim_province(
     mut commands: Commands
 ) {
     commands.trigger(HouseAdded { province: event.province });
-    commands.trigger(ResourceBuildingAdded { province: event.province });
+    commands.trigger(SpecialBuildingAdded { province: event.province });
 
     /* Assign the province to the empire */
     commands
@@ -148,9 +199,6 @@ fn assign_provinces(
 
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: plains_ent.clone() });
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: woods_ent.clone() });
-            // add_province_to_empire(&empire, plains_ent, &mut commands, &models, &q_transforms);
-            // add_province_to_empire(&empire, woods_ent, &mut commands, &models, &q_transforms);
-            
             break;
         }
     }
