@@ -1,7 +1,8 @@
 use bevy::prelude::*;
+use strum_macros::EnumIter;
 use std::{cmp, fmt};
 
-#[derive(Clone, Copy, Debug, PartialEq, cmp::Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, cmp::Eq, Hash, EnumIter)]
 pub enum ResourceType {
     Grain,
     Lumber,

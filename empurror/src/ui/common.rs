@@ -34,9 +34,11 @@ impl Plugin for GameUIPlugin {
             .add_systems(Update, 
                 (
                     toggle_province_view,
+                    update_treasury_panel,
                     update_province_panel_group,
                     update_claim_button,
                     update_build_house_button,
+                    update_build_resource_building_button,
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )

@@ -1,6 +1,5 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMap, prelude::*};
 use std::{cmp::{Eq, min}, f32::consts::PI};
-// use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 use crate::game_logic::{empire::Controls, resources::ResourceType};
@@ -59,31 +58,32 @@ impl ProvinceType {
         }
     }
 
-    pub fn resource_building_cost(&self) -> HashMap<ResourceType, f32> {
-        match self {
-            ProvinceType::BlackSoil | ProvinceType::Plains => {
-                [(ResourceType::Lumber, 10.0)].into()
-            },
-            ProvinceType::Woods => {
-                [(ResourceType::Lumber, 15.0)].into()
-            },
-            ProvinceType::Hills => {
-                [(ResourceType::Lumber, 20.0)].into()
-            },
-            ProvinceType::Mountains => {
-                [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into()
-            },
-            _ => {
-                error!("Invalid province type");
-                return Default::default();
-            }
-        }
-    }
+    // pub fn resource_building_cost(&self) -> HashMap<ResourceType, f32> {
+    //     match self {
+    //         ProvinceType::BlackSoil | ProvinceType::Plains => {
+    //             [(ResourceType::Lumber, 10.0)].into()
+    //         },
+    //         ProvinceType::Woods => {
+    //             [(ResourceType::Lumber, 15.0)].into()
+    //         },
+    //         ProvinceType::Hills => {
+    //             [(ResourceType::Lumber, 20.0)].into()
+    //         },
+    //         ProvinceType::Mountains => {
+    //             [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into()
+    //         },
+    //         _ => {
+    //             error!("Invalid province type");
+    //             return Default::default();
+    //         }
+    //     }
+    // }
 }
 
 #[derive(Component)]
 pub struct Province {
     pub ptype: ProvinceType,
+    special_building: bool,
     house_count: u32,
     pops: u32,
     max_pops: u32,
@@ -96,12 +96,53 @@ impl Province {
     pub fn from_type(t: &ProvinceType) -> Self {
         Self {
             ptype: t.clone(),
+            special_building: false,
             house_count: 0,
-            pops: 1,
+            pops: 0,
             max_pops: 0,
             upkeep: Default::default(),
             income: Default::default(),
             pops_income: 0,
+        }
+    }
+
+    pub fn building_name(&self) -> String {
+        match self.ptype {
+            ProvinceType::BlackSoil | ProvinceType::Plains => String::from("Farm"),
+            ProvinceType::Woods => String::from("Lumber Mill"),
+            ProvinceType::Hills => String::from("Stone Mine"),
+            ProvinceType::Mountains => String::from("Gold Mine"),
+            _ => {
+                error!("Bad error, we don't like it woo");
+                return String::new()
+            }
+        }
+    }
+
+    pub fn special_building_type(&self) -> Option<SpecialBuilding> {
+        match self.ptype {
+            ProvinceType::BlackSoil | ProvinceType::Plains => Some(SpecialBuilding::Farm),
+            ProvinceType::Woods => Some(SpecialBuilding::LumberMill),
+            ProvinceType::Hills => Some(SpecialBuilding::StoneMine),
+            ProvinceType::Mountains => Some(SpecialBuilding::GoldMine),
+            _ => None
+        }
+    }
+
+    /// Use carefulyy, doesn't perform checks
+    pub fn add_pop(&mut self) {
+        self.pops += 1;
+    }
+
+    pub fn can_build_special_building(&self) -> bool {
+        if self.special_building {
+            false
+        }
+        else if let ProvinceType::Desert | ProvinceType::Water = self.ptype {
+            false
+        }
+        else {
+            true
         }
     }
 
@@ -236,10 +277,10 @@ impl SpecialBuilding {
 
     pub fn build_cost(&self) -> HashMap<ResourceType, f32> {
         match self {
-            SpecialBuilding::Farm => ProvinceType::Plains.resource_building_cost(),
-            SpecialBuilding::LumberMill => ProvinceType::Woods.resource_building_cost(),
-            SpecialBuilding::StoneMine => ProvinceType::Hills.resource_building_cost(),
-            SpecialBuilding::GoldMine => ProvinceType::Mountains.resource_building_cost(),
+            SpecialBuilding::Farm => [(ResourceType::Lumber, 10.0)].into(),
+            SpecialBuilding::LumberMill => [(ResourceType::Lumber, 15.0)].into(),
+            SpecialBuilding::StoneMine => [(ResourceType::Lumber, 20.0)].into(),
+            SpecialBuilding::GoldMine => [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into(),
             SpecialBuilding::Castle => panic!("I dunno yet lmao"),
         }
     }
@@ -347,9 +388,15 @@ pub fn add_resource_building(
     mut q_provinces: Query<(&Transform, &mut Province)>,
     mut commands: Commands,
 ) {
-    let Ok((prov_transform, prov)) = q_provinces.get_mut(event.province) else {
+    let Ok((prov_transform, mut prov)) = q_provinces.get_mut(event.province) else {
         return;
     };
+
+    if !prov.can_build_special_building() {
+        error!("Cannot build special building in this province");
+        return;
+    }
+    prov.special_building = true;
 
     let transl = Vec3::new(0.0, 0.5, 0.0);
     let desired = Transform::from_translation(transl);
@@ -374,10 +421,10 @@ pub fn add_resource_building(
         }
     };
 
-    let building_id = commands.spawn((
+    commands.spawn((
         LocatedIn(event.province),
         building_type,
         SceneRoot(model),
         transform
-    )).id();
+    ));
 }

@@ -70,6 +70,18 @@ pub struct UIBuildHouseText;
 pub struct UIBuildResourceBuildingText;
 #[derive(Component)]
 pub struct UIResidentsText;
+
+/* Treasury panel */
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UIResourceType {
+    Regular(ResourceType),
+    Pops
+}
+#[derive(Component)]
+pub struct UIResourceIncomeText(pub UIResourceType);
+#[derive(Component)]
+pub struct UIResourceTotalText(pub UIResourceType);
+
 /* Systems */
 
 fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
@@ -403,6 +415,7 @@ pub fn format_income(val: f32) -> String {
 fn resource_view(
     icon: &Handle<Image>,
     total: f32, income: f32,
+    typ: &UIResourceType
 ) -> (impl Bundle, impl Bundle, impl Bundle) {
     let icon = (
         Node {
@@ -417,6 +430,7 @@ fn resource_view(
     );
 
     let total = (
+        UIResourceTotalText(typ.clone()),
         Text::new(format_resource(total)),
         TextFont { 
             font_size: 17.0,
@@ -433,6 +447,7 @@ fn resource_view(
     };
 
     let income = (
+        UIResourceIncomeText(typ.clone()),
         Text::new(format_income(income)),
         TextFont { 
             font_size: 17.0,
@@ -449,11 +464,31 @@ pub fn spawn_treasury_panel(
     mut commands: Commands,
     icons: Res<Icons>
 ) {
-    let (pops_icon, pops_total, pops_income) = resource_view(&icons.pops, 14.0, 3.0);
-    let (grain_icon, grain_total, grain_income) = resource_view(&icons.grain, 231.0, -12.0);
-    let (lumber_icon, lumber_total, lumber_income) = resource_view(&icons.lumber, 43.0, 7.0);
-    let (stone_icon, stone_total, stone_income) = resource_view(&icons.stone, 2.0, 0.0);
-    let (gold_icon, gold_total, gold_income) = resource_view(&icons.gold, 21.0, 37.0);
+    let (pops_icon, pops_total, pops_income) = resource_view(&icons.pops, 14.0, 3.0, &UIResourceType::Pops);
+    let (grain_icon, grain_total, grain_income) = resource_view(
+        &icons.grain,
+        231.0, 
+        -12.0,
+        &UIResourceType::Regular(ResourceType::Grain)
+    );
+    let (lumber_icon, lumber_total, lumber_income) = resource_view(
+        &icons.lumber,
+        43.0,
+        7.0,
+        &UIResourceType::Regular(ResourceType::Lumber)
+    );
+    let (stone_icon, stone_total, stone_income) = resource_view(
+        &icons.stone,
+        2.0,
+        0.0,
+        &UIResourceType::Regular(ResourceType::Stone)
+    );
+    let (gold_icon, gold_total, gold_income) = resource_view(
+        &icons.gold,
+        21.0,
+        37.0,
+        &UIResourceType::Regular(ResourceType::Gold)
+    );
     let empty = Node {
         width: px(5),
         height: px(5),
@@ -491,10 +526,6 @@ pub fn spawn_treasury_panel(
     commands.spawn(main_panel);
 }
 
-// fn make_resource_panel(
-//     resources: &[(impl Bundle, impl Bundle, impl Bundle)],
-    
-// )
 
 
 // TODO:

@@ -1,4 +1,5 @@
 use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
+use strum::IntoEnumIterator;
 
 use crate::game_logic::{province::*, resources::ResourceType};
 use crate::scene::hex_grid::{HexGrid};
@@ -33,18 +34,59 @@ pub struct Empire {
     pub pops_income: u32,
 }
 
+pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> f32 {
+    map.get(typ).cloned().unwrap_or(0.0)
+}
+
 impl Empire {
+    fn starting_resources() -> HashMap<ResourceType, f32> {
+        [
+            (ResourceType::Gold, 5.0), 
+            (ResourceType::Grain, 20.0),
+            (ResourceType::Lumber, 10.0),
+            (ResourceType::Stone, 5.0)
+        ].into()
+    }
+
     pub fn new(id: u32, color: Color, name: String) -> Self {
         Empire {
             id,
             color,
             name,
-            resource_total: Default::default(),
+            resource_total: Self::starting_resources(),
             resource_income: Default::default(),
             pops_total: 2,
-            pops_free: 0,
+            pops_free: 2,
             pops_income: 0
         }
+    }
+
+    pub fn get_pops(&self) -> u32 {
+        self.pops_total
+    }
+
+    pub fn get_free_pops(&self) -> u32 {
+        self.pops_free
+    }
+
+    pub fn get_total(&self, typ: &ResourceType) -> f32 {
+        self.resource_total.get(typ).cloned().unwrap_or(0.0)
+    }
+
+    pub fn get_income(&self, typ: &ResourceType) -> f32 {
+        self.resource_income.get(typ).cloned().unwrap_or(0.0)
+    }
+
+    pub fn has_free_pops(&self) -> bool {
+        self.pops_free > 0
+    }
+
+    pub fn can_afford(&self, cost: &HashMap<ResourceType, f32>) -> bool {
+        cost
+            .iter()
+            .all(|(k, v)| {
+                self.get_total(k) >= *v
+            })
     }
 }
 
@@ -76,37 +118,54 @@ pub struct ProvinceClaimed {
 }
 
 #[derive(Event, Debug)]
-pub struct ResourceIncomeChanged;
+pub struct ResourceIncomeChanged {
+    pub empire: Entity
+}
 #[derive(Event, Debug)]
-pub struct PopsIncomeChanged;
+pub struct PopsIncomeChanged {
+    pub empire: Entity
+}
 
 /* Systems */
 pub fn calculate_empire_resource_income(
     event: On<ResourceIncomeChanged>,
-    empires: Res<Empires>,
-    q_provinces: Query<(&Province, Option<&ProvinceBuildings>, &ControlledBy)>
+    mut q_empires: Query<(&mut Empire, &Controls)>,
+    q_provinces: Query<&Province>
 ) {
-    // let Some(player_empire) = empires.player_empire() else {
-    //     error!("Player empire missing");
-    //     return;
-    // };
-    // q_provinces
-    //     .iter()
-    //     .filter(|(p, buildings, owner)| owner.0 == player_empire)
+    let Ok((mut empire_c, controls)) = q_empires.get_mut(event.empire) else {
+        error!("Empire component missing");
+        return;
+    };
+    empire_c.resource_income = controls.0
+        .iter()
+        .flat_map(|p_ent| q_provinces.get(*p_ent))
+        .map(|province| province.get_income())
+        .fold(HashMap::<ResourceType, f32>::new(), |total, income| {
+            ResourceType::iter()
+                .map(|typ| {
+                    let combined = resource_amount(&total, &typ) + resource_amount(&income, &typ);
+
+                    (typ, combined)
+                })
+                .collect()
+        });
 }
 
 pub fn calculate_empire_pops_income(
     event: On<PopsIncomeChanged>,
-    empires: Res<Empires>,
-    q_provinces: Query<(&Province, Option<&ProvinceBuildings>, &ControlledBy)>
+    mut q_empires: Query<(&mut Empire, &Controls)>,
+    q_provinces: Query<&Province>
 ) {
-    // let Some(player_empire) = empires.player_empire() else {
-    //     error!("Player empire missing");
-    //     return;
-    // };
-    // q_provinces
-    //     .iter()
-    //     .filter(|(p, buildings, owner)| owner.0 == player_empire)
+    let Ok((mut empire_c, controls)) = q_empires.get_mut(event.empire) else {
+        error!("Empire component missing");
+        return;
+    };
+    empire_c.pops_income = controls.0
+        .iter()
+        .flat_map(|p_ent| q_provinces.get(*p_ent))
+        .map(|province| province.get_pops_income())
+        .sum();
+        
 }
 
 fn spawn_empires(
@@ -138,15 +197,34 @@ fn spawn_empires(
 
 pub fn claim_province(
     event: On<ProvinceClaimed>,
+    mut q_provinces: Query<&mut Province>,
+    mut q_empires: Query<&mut Empire>,
     mut commands: Commands
 ) {
+    let Ok(mut prov) = q_provinces.get_mut(event.province) else {
+        error!("Missing province component");
+        return;
+    };
+    let Ok(mut empire) = q_empires.get_mut(event.empire) else {
+        error!("Missing empire component");
+        return;
+    };
+    if !empire.has_free_pops() {
+        error!("Called claim_province when no free pops available!");
+        return;
+    }
+    empire.pops_free -= 1;
+    prov.add_pop();
     commands.trigger(HouseAdded { province: event.province });
-    commands.trigger(SpecialBuildingAdded { province: event.province });
 
     /* Assign the province to the empire */
     commands
         .entity(event.province)
         .insert(ControlledBy(event.empire));
+
+    commands.trigger(ProvinceIncomeChanged { province: event.province });
+    commands.trigger(ResourceIncomeChanged { empire: event.empire });
+    commands.trigger(PopsIncomeChanged { empire: event.empire });
 }
 
 /// Add some starter provinces to each empire
@@ -199,6 +277,7 @@ fn assign_provinces(
 
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: plains_ent.clone() });
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: woods_ent.clone() });
+            // commands.trigger();
             break;
         }
     }
