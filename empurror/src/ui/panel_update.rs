@@ -1,6 +1,6 @@
-use bevy::{picking::hover::Hovered, platform::collections::HashMap, prelude::*, ui::*};
+use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::*, province::*, resources::*}, game_systems::GameSystems, scene::{assets::*, hex_grid::*}, ui::panels::*};
+use crate::{game_logic::{empire::*, province::*, resources::*}, scene::{assets::*, hex_grid::*}, ui::panels::*};
 
 pub fn resource_str(map: &HashMap<ResourceType, f32>) -> String {
     map
@@ -142,7 +142,7 @@ fn update_claims_panel(
         return;
     }
 
-    let Ok((prov, _, _)) = q_provinces.get(*province) else {
+    let Ok((_, _, _)) = q_provinces.get(*province) else {
         error!("Province entity lacks province component");
         return;
     };
@@ -241,13 +241,11 @@ fn update_detailed_province_panel(
         .unwrap_or(false);
 
     if !can_build {
-        // info!("Cannot build building!");
         commands
             .entity(button)
             .insert(InteractionDisabled);
     }
     else {
-        // info!("Can build building!");
         commands
             .entity(button)
             .remove::<InteractionDisabled>();
@@ -255,6 +253,50 @@ fn update_detailed_province_panel(
     
     let detailed = &mut *nodes.p2();
     detailed.display = Display::Flex;
+}
+
+pub fn assign_residents_interaction(
+    keyboard: Res<ButtonInput<Key>>,
+    pick: Res<PickedProvince>,
+    panel_node: Single<&Node, With<UIDetailedProvincePanel>>,
+    mut q_empires: Query<&mut Empire>,
+    mut q_provinces: Query<&mut Province>,
+    empires: Res<Empires>,
+    mut text: Single<&mut Text, With<UIResidentsText>>,
+    mut commands: Commands
+) {
+    if panel_node.display != Display::Flex {
+        return;
+    }
+    let increase = keyboard.just_released(Key::Character("+".into()));
+    let decrease = keyboard.just_released(Key::Character("-".into()));
+    if !(increase ^ decrease) {
+        return;
+    }
+
+    let PickedProvince::Selected(prov_ent) = *pick else {
+        return;
+    };
+    let Ok(mut prov) = q_provinces.get_mut(prov_ent) else {
+        return;
+    };
+    let Some(player_empire) = empires.get_entity(PLAYER_EMPIRE) else {
+        error!("Missing player empirr entity");
+        return;
+    };
+    let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+        error!("Missing player empire component");
+        return;
+    };
+    if increase && empire_c.has_free_pops() {
+        prov.try_add_pop().then(|| empire_c.try_remove_free_pop());
+    }
+    if decrease && prov.try_remove_pop() {
+        empire_c.add_free_pop();
+    }
+
+    commands.trigger(ResourceIncomeChanged { empire: *player_empire });
+    commands.trigger(PopsIncomeChanged { empire: *player_empire });
 }
 
 /* Terrible code, I am in tears  */
@@ -373,173 +415,3 @@ pub fn update_treasury_panel(
         });
 }
 
-fn set_button_style(
-    mess: &str,
-    disabled_mess: &str,
-    disabled: bool,
-    hovered: bool,
-    pressed: bool,
-    color: &mut BackgroundColor,
-    text: &mut Text,
-) {
-    match (disabled, hovered, pressed) {
-        // Disabled button
-        (true, _, _) => {
-            **text = disabled_mess.to_string();
-            *color = BUTTON_COLOR.into();
-        }
-
-        // Pressed and hovered button
-        (false, true, true) => {
-            **text = mess.to_string();
-            *color = BUTTON_COLOR_PRESS.into();
-        }
-
-        // Hovered, unpressed button
-        (false, true, false) => {
-            **text = mess.to_string();
-            *color = BUTTON_COLOR_HOVER.into();
-        }
-
-        // Unhovered button (either pressed or not).
-        (false, false, _) => {
-            **text = mess.to_string();
-            *color = BUTTON_COLOR.into();
-        }
-    }
-}
-
-
-pub fn update_claim_button(
-    mut button: Single<
-        (
-            Option<&Pressed>,
-            &Hovered,
-            Option<&InteractionDisabled>,
-            &mut BackgroundColor,
-            &Children,
-        ),
-        With<ClaimProvinceButton>
-    >,
-    button_ent: Single<Entity, With<ClaimProvinceButton>>,
-    mut text_query: Query<&mut Text>,
-    pick: Res<PickedProvince>,
-    empires: Res<Empires>,
-    mut commands: Commands
-) {
-    let (pressed, hovered, disabled, color, children) = &mut *button;
-    let Ok(mut text) = text_query.get_mut(children[0]) else {
-        return;
-    };
-    
-    let claim_text = format!("Claim Province ({})", resource_str(&House::build_cost()));
-    set_button_style(&claim_text, &claim_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
-
-    if pressed.is_some() && !disabled.is_some() {
-        let PickedProvince::Selected(province) = *pick else {
-            error!("Missing selected province!");
-            return;
-        };
-        let Some(player_empire) = empires.player_empire() else {
-            error!("Missing player empire");
-            return;
-        };
-    
-        commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(ProvinceClaimed { empire: *player_empire, province });
-        commands.trigger(ProvinceIncomeChanged { province });
-        commands.trigger(ResourceIncomeChanged { empire: *player_empire });
-        commands.trigger(PopsIncomeChanged { empire: *player_empire });
-    }
-}
-
-pub fn update_build_house_button(
-    mut button: Single<
-        (
-            Option<&Pressed>,
-            &Hovered,
-            Option<&InteractionDisabled>,
-            &mut BackgroundColor,
-            &Children,
-        ),
-        With<BuildHouseButton>
-    >,
-    button_ent: Single<Entity, With<BuildHouseButton>>,
-    mut text_query: Query<&mut Text>,
-    pick: Res<PickedProvince>,
-    mut commands: Commands,
-) {
-    let (pressed, hovered, disabled, color, children) = &mut *button;
-    let Ok(mut text) = text_query.get_mut(children[0]) else {
-        return;
-    };
-    
-    let house_text = format!("Build House ({})", resource_str(&House::build_cost()));
-    set_button_style(&house_text, &house_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
-
-    if pressed.is_some() && !disabled.is_some() {
-        let PickedProvince::Selected(province) = *pick else {
-            error!("Missing selected province!");
-            return;
-        };
-
-        commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(HouseAdded { province });
-    }
-}
-
-pub fn update_build_resource_building_button(
-    mut button: Single<
-        (
-            Option<&Pressed>,
-            &Hovered,
-            Option<&InteractionDisabled>,
-            &mut BackgroundColor,
-            &Children,
-        ),
-        With<BuildResourceBuildingButton>
-    >,
-    button_ent: Single<Entity, With<BuildResourceBuildingButton>>,
-    mut text_query: Query<&mut Text>,
-    pick: Res<PickedProvince>,
-    q_provinces: Query<(&Province, &ControlledBy)>,
-    mut commands: Commands,
-) {
-    let (pressed, hovered, disabled, color, children) = &mut *button;
-    let Ok(mut text) = text_query.get_mut(children[0]) else {
-        return;
-    };
-    
-    let PickedProvince::Selected(prov) = *pick else {
-        return;
-    };
-    let building_name =
-        q_provinces
-            .get(prov)
-            .map(|(p, _)| p.building_name())
-            .unwrap_or(String::from("Invalid building"));
-    let building_type = 
-        q_provinces
-            .get(prov)
-            .map(|(p, _)| p.special_building_type())
-            .unwrap_or(Some(SpecialBuilding::Farm))
-            .unwrap_or(SpecialBuilding::Farm);
-
-    let button_text = format!("Build {} ({})", building_name, resource_str(&building_type.build_cost()));
-    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
-
-    if pressed.is_some() && !disabled.is_some() {
-        let PickedProvince::Selected(province) = *pick else {
-            error!("Missing selected province!");
-            return;
-        };
-        let Ok((_, controlled_by)) = q_provinces.get(province) else {
-            error!("Missing components");
-            return;
-        };
-        commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(SpecialBuildingAdded { province });
-        commands.trigger(ProvinceIncomeChanged { province });
-        commands.trigger(ResourceIncomeChanged { empire: controlled_by.0 });
-    }
-}

@@ -1,3 +1,4 @@
 pub mod common;
 pub mod panels;
-pub mod ui_update;
+pub mod panel_update;
+pub mod button_update;

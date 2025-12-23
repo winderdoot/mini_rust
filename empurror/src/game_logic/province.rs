@@ -129,6 +129,26 @@ impl Province {
         }
     }
 
+    pub fn try_add_pop(&mut self) -> bool {
+        if self.pops < self.max_pops {
+            self.pops += 1;
+            true
+        }
+        else {
+            false
+        }
+    }
+
+    pub fn try_remove_pop(&mut self) -> bool {
+        if self.pops > 1 {
+            self.pops -= 1;
+            true
+        }
+        else {
+            false
+        }
+    }
+
     /// Use carefulyy, doesn't perform checks
     pub fn add_pop(&mut self) {
         self.pops += 1;

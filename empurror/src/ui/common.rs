@@ -1,7 +1,7 @@
 use bevy::{prelude::*};
 use bevy_ui_widgets::UiWidgetsPlugins;
 
-use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, ui_update::*}};
+use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, panel_update::*, button_update::*}};
 
 /* Systems */
 fn toggle_province_view(
@@ -34,6 +34,7 @@ impl Plugin for GameUIPlugin {
             .add_systems(Update, 
                 (
                     toggle_province_view,
+                    assign_residents_interaction,
                     update_treasury_panel,
                     update_province_panel_group,
                     update_claim_button,

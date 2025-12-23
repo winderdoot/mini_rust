@@ -69,6 +69,20 @@ impl Empire {
         self.pops_free
     }
 
+    pub fn try_remove_free_pop(&mut self) -> bool {
+        if self.pops_free == 0 {
+            false
+        }
+        else {
+            self.pops_free -= 1;
+            true
+        }
+    }
+
+    pub fn add_free_pop(&mut self) {
+        self.pops_free += 1
+    }
+
     pub fn get_total(&self, typ: &ResourceType) -> f32 {
         self.resource_total.get(typ).cloned().unwrap_or(0.0)
     }
