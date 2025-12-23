@@ -1,6 +1,6 @@
 use bevy::{picking::hover::Hovered, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::*, province::*}, scene::{hex_grid::*}, ui::{panels::*, panel_update::*}};
+use crate::{game_logic::{empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
 
 fn set_button_style(
     mess: &str,
@@ -200,5 +200,45 @@ pub fn update_build_resource_building_button(
         commands.trigger(SpecialBuildingAdded { province });
         commands.trigger(ProvinceIncomeChanged { province });
         commands.trigger(ResourceIncomeChanged { empire: *player_empire });
+    }
+}
+
+pub fn update_end_turn_button(
+    mut button: Single<
+        (
+            Option<&Pressed>,
+            &Hovered,
+            Option<&InteractionDisabled>,
+            &mut BackgroundColor,
+            &Children,
+        ),
+        With<EndTurnButton>
+    >,
+    button_ent: Single<Entity, With<EndTurnButton>>,
+    mut text_query: Query<&mut Text>,
+    empires: Res<Empires>,
+    q_empires: Query<&Empire>,
+    mut commands: Commands,
+) {
+    let (pressed, hovered, disabled, color, children) = &mut *button;
+    let Ok(mut text) = text_query.get_mut(children[0]) else {
+        return;
+    };
+
+    let button_text = String::from("End Turn");
+    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
+
+    if pressed.is_some() && !disabled.is_some() {
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
+            return;
+        };
+        let Ok(empire_c) = q_empires.get(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+
+        commands.entity(*button_ent).remove::<Pressed>();
+        commands.trigger(EndTurn { empire_id: empire_c.id });
     }
 }

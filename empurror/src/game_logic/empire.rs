@@ -111,6 +111,13 @@ impl Empire {
                 self.resource_total.insert(*k, new_total);
             });
     }
+
+    pub fn apply_income(&mut self) {
+        for (k, v) in &self.resource_income {
+            let new_total = self.get_total(k) + *v;
+            self.resource_total.insert(*k, new_total);
+        }
+    }
 }
 
 /// Only used a single time, when so that we can insert the number of provinces into the system that spawns them
@@ -188,7 +195,6 @@ pub fn calculate_empire_pops_income(
         .flat_map(|p_ent| q_provinces.get(*p_ent))
         .map(|province| province.get_pops_income())
         .sum();
-        
 }
 
 fn spawn_empires(

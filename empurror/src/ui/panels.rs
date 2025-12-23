@@ -79,6 +79,10 @@ pub struct UIResourceIncomeText(pub UIResourceType);
 #[derive(Component)]
 pub struct UIResourceTotalText(pub UIResourceType);
 
+/* New turn button */
+#[derive(Component)]
+pub struct EndTurnButton;
+
 /* Systems */
 
 fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
@@ -396,6 +400,57 @@ pub fn spawn_province_panel_group(
     commands.spawn(container);
 }
 
+pub fn spawn_end_turn_button(
+    mut commands: Commands
+) {
+    let button = (
+        Node {
+            border: UiRect::all(px(2)),
+            padding: UiRect::all(px(5)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        EndTurnButton,
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        BorderColor::all(Color::WHITE),
+        BorderRadius::all(px(15)),
+        BackgroundColor(BUTTON_COLOR),
+        children![(
+            Text::new("End Turn"),
+            TextFont {
+                font_size: 22.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )],
+    );
+
+    let container = (
+        Node {
+            display: Display::None,
+            width: auto(),
+            height: auto(),
+            position_type: PositionType::Absolute,
+            right: px(0),
+            top: px(0),
+            /* Children */
+            align_items: AlignItems::End,
+            flex_direction: FlexDirection::ColumnReverse,
+            row_gap: px(10),
+            padding: UiRect::new(px(0), TPL_PADDING, TPL_PADDING, TPL_PADDING),
+            ..Default::default()
+        },
+        children![
+            button
+        ]
+    );
+
+    commands.spawn(container);
+}
+
 pub fn format_resource(val: f32) -> String {
     format!("{:.0}", val)
 }
@@ -522,16 +577,3 @@ pub fn spawn_treasury_panel(
 
     commands.spawn(main_panel);
 }
-
-
-
-// TODO:
-/* Panel wyświetlający typ prowincji i flagę imperium jeśli jest  */
-/* Jak się zaznaczy prowincję to pojawia się większy panel z opcjami dla budynków i populacji  */
-/* Wtedy trzeba zrobić zasoby, najlepiej chyba do imperium dać floaty.  */
-/* Panel na górze wyświetlający zasoby  */
-/* Przycisk nowej tury */
-/* Budowanie budynków i ulepszanie ich */
-/* Claimowanie sąsiednich prowincji przez budowanie domku i wstawienie tam kota */
-/* Scroll/tick up-down do wybierania ile kotów ma mieszkać w danej prowincji */
-/* Budowanie zamku i rekrutacja jednostek */

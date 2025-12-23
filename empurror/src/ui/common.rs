@@ -27,7 +27,8 @@ impl Plugin for GameUIPlugin {
             .add_systems(Startup, 
                 (
                     spawn_province_panel_group,
-                    spawn_treasury_panel
+                    spawn_treasury_panel,
+                    spawn_end_turn_button
                 )
                 .in_set(StartupSystems::CreateUI)
             )
