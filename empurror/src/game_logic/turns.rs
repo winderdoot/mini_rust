@@ -1,11 +1,20 @@
+use std::f32::consts::E;
+
 use bevy::prelude::*;
 
-use crate::{game_logic::empire::*, game_systems::StartupSystems};
+use crate::{game_logic::empire::*, game_systems::{GameSystems, StartupSystems}};
 
 #[derive(Resource)]
 pub struct Turns {
-    pub completed_rounds: u32,
-    pub empire_count: u32, /* Duplicate info from Empires resource */
+    completed_rounds: u32,
+    empire_count: u32, /* Duplicate info from Empires resource */
+    current_empire: u32,
+}
+
+impl Turns {
+    pub fn is_player_turn(&self) -> bool {
+        self.current_empire == PLAYER_EMPIRE
+    }
 }
 
 /// Used to mark the end of a turn, so that empire actions can be calculated and have proper effect.
@@ -23,14 +32,24 @@ pub struct NewTurn {
 /* Systems  */
 fn init_turns(
     mut commands: Commands,
-    empires: Res<Empires>
+    empires: Res<Empires>,
+    systems: Res<GameSystems>
 ) {
     commands.insert_resource(
         Turns {
             completed_rounds: 0,
             empire_count: empires.count,
+            current_empire: PLAYER_EMPIRE
         }
     );
+
+    /* We need to calculate the inital upkeeps & incomes for all provinces in each empire */
+    let Some(system) = systems.get(stringify!(calculate_all_provinces_income)) else {
+        error!("Missing game system");
+        return;
+    };
+    commands.run_system(*system);
+    commands.trigger(NewTurn { empire_id: PLAYER_EMPIRE });
 }
 
 fn turn_ended(
@@ -64,6 +83,7 @@ fn turn_ended(
 
 fn turn_started(
     event: On<NewTurn>,
+    mut turns: ResMut<Turns>,
     empires: Res<Empires>,
     mut q_empires: Query<&mut Empire>,
     mut commands: Commands
@@ -78,7 +98,8 @@ fn turn_started(
     };
     
     info!("Empire {} starts it's turn", event.empire_id);
-    
+    turns.current_empire = event.empire_id;
+
     commands.trigger(ResourceIncomeChanged { empire: *empire_ent });
     commands.trigger(PopsIncomeChanged { empire: *empire_ent });
     

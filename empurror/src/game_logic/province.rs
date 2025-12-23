@@ -89,7 +89,6 @@ pub struct Province {
     max_pops: u32,
     upkeep: HashMap<ResourceType, f32>,
     income: HashMap<ResourceType, f32>,
-    pops_income: u32,
 }
 
 impl Province {
@@ -102,7 +101,6 @@ impl Province {
             max_pops: 0,
             upkeep: Default::default(),
             income: Default::default(),
-            pops_income: 0,
         }
     }
 
@@ -187,7 +185,7 @@ impl Province {
     }
 
     pub fn get_pops_income(&self) -> u32 {
-        self.pops_income
+        min(1, self.max_pops - self.pops)
     }
 
     fn upkeep(&self) -> HashMap<ResourceType, f32> {
@@ -356,7 +354,6 @@ pub fn calculate_province_income(
         });
 
     p.upkeep = p.upkeep();
-    p.pops_income = min(2, p.max_pops - p.pops);
 
     p.income =  
     if building_income.is_empty() {
@@ -399,6 +396,8 @@ pub fn add_house(
         SceneRoot(models.house.clone()),
         transform
     ));
+
+    commands.trigger(ProvinceIncomeChanged { province: event.province });
 }
 
 
@@ -447,4 +446,6 @@ pub fn add_resource_building(
         SceneRoot(model),
         transform
     ));
+
+    commands.trigger(ProvinceIncomeChanged { province: event.province });
 }

@@ -1,10 +1,11 @@
-use empurror::game_logic::{events::GameEventPlugin, empire::EmpirePlugin, game_states::*, recently_moved::RecentlyMovedPlugin};
+use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
+
+use std::f32::consts::{PI};
+
+use empurror::game_logic::{turns::*, events::GameEventPlugin, empire::EmpirePlugin, game_states::*, recently_moved::RecentlyMovedPlugin};
 use empurror::scene::{assets::GameModelsPlugin, hex_grid::*, orbit_camera::*};
 use empurror::game_systems::*;
-
-use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::CascadeShadowConfigBuilder};
 use empurror::ui::common::GameUIPlugin;
-use std::f32::consts::{PI};
 
 
 fn main() {
@@ -16,7 +17,8 @@ fn main() {
                 // FpsOverlayPlugin::default(),
                 MeshPickingPlugin,
                 /* Empurror custom plugins */
-                GameSystemsPlugin, /* Manages system sets and their ordering */
+                TurnGameplayPlugin,
+                GameSystemsPlugin,
                 GameStatePlugin,
                 HexGridPlugin,
                 GameModelsPlugin,

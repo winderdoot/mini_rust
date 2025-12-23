@@ -41,6 +41,7 @@ impl Plugin for GameUIPlugin {
                     update_claim_button,
                     update_build_house_button,
                     update_build_resource_building_button,
+                    update_end_turn_button
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )

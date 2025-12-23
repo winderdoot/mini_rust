@@ -12,7 +12,7 @@ impl Plugin for GameEventPlugin {
             .add_observer(add_resource_building)
             .add_observer(claim_province)
             .add_observer(calculate_province_income)
-            .add_observer(calculate_empire_resource_income)
+            .add_observer(calculate_empire_resource_net_income)
             .add_observer(calculate_empire_pops_income);
     }
 }

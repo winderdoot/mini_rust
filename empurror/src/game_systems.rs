@@ -1,7 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_ecs::system::SystemId;
 
-use crate::ui::panel_update::*;
+use crate::{game_logic::empire::*};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum StartupSystems {
@@ -9,7 +9,7 @@ pub enum StartupSystems {
     CreateEmpires,
     CreateHexGrid,
     AssignEmpireProvinces,
-    InitTurns,
+    InitTurns, /* Here we will have to enable ui, so we mind need a new state  */
     CreateUI,
 }
 
@@ -52,12 +52,11 @@ pub struct GameSystemsPlugin;
  * to specific game systems. */
 impl Plugin for GameSystemsPlugin {
     fn build(&self, app: &mut App) {
-        // let game_systems = GameSystems::new()
-        //     .add(stringify!(update_claim_button), app.register_system(update_claim_button))
-        //     .add(stringify!(update_build_house_button), app.register_system(update_build_house_button));
+        let game_systems = GameSystems::new()
+            .add(stringify!(calculate_all_provinces_income), app.register_system(calculate_all_provinces_income));
 
         app
-            // .insert_resource(game_systems)
+            .insert_resource(game_systems)
             .configure_sets(Startup, (
                 StartupSystems::LoadAssets,
                 StartupSystems::CreateEmpires,

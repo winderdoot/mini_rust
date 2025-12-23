@@ -267,12 +267,13 @@ impl Plugin for HexGridPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<PickedProvince>()
-            .add_systems(Startup, (
-                load_hexgird_settings,
-                setup_hexgrid
-            )
-            .chain()
-            .in_set(StartupSystems::CreateHexGrid)
-        );
+            .add_systems(Startup, 
+                (
+                    load_hexgird_settings,
+                    setup_hexgrid
+                )
+                .chain()
+                .in_set(StartupSystems::CreateHexGrid)
+            );
     }
 }

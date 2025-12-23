@@ -15,7 +15,7 @@ fn set_button_style(
         // Disabled button
         (true, _, _) => {
             **text = disabled_mess.to_string();
-            *color = BUTTON_COLOR.into();
+            *color = BUTTON_COLOR_DISABLED.into();
         }
 
         // Pressed and hovered button
@@ -83,10 +83,8 @@ pub fn update_claim_button(
         empire_c.remove_resources(&cost);
 
         commands.entity(*button_ent).remove::<Pressed>();
+        /* This event triggers other events for calculating incomes for province and empire */
         commands.trigger(ProvinceClaimed { empire: *player_empire, province });
-        commands.trigger(ProvinceIncomeChanged { province });
-        commands.trigger(ResourceIncomeChanged { empire: *player_empire });
-        commands.trigger(PopsIncomeChanged { empire: *player_empire });
     }
 }
 
@@ -133,7 +131,7 @@ pub fn update_build_house_button(
         empire_c.remove_resources(&cost);
 
         commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(HouseAdded { province });
+        commands.trigger(HouseAdded { province }); /* Causes the province to calculate it's income too */
     }
 }
 
@@ -197,8 +195,7 @@ pub fn update_build_resource_building_button(
         empire_c.remove_resources(&build_cost);
 
         commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(SpecialBuildingAdded { province });
-        commands.trigger(ProvinceIncomeChanged { province });
+        commands.trigger(SpecialBuildingAdded { province }); /* Causes the province to calculate it's income too */
         commands.trigger(ResourceIncomeChanged { empire: *player_empire });
     }
 }

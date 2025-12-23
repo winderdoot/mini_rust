@@ -15,7 +15,6 @@ pub struct Models {
 #[derive(Resource, Default)]
 pub struct EmpireAssets {
     pub flags: Vec<Handle<Image>>,
-    pub no_flag: Handle<Image>
 }
 
 #[derive(Resource, Default)]
@@ -37,7 +36,6 @@ fn load_empire_flags(
     assets.flags.push(server.load("flags/flag3.png"));
     assets.flags.push(server.load("flags/flag4.png"));
     assets.flags.push(server.load("flags/flag5.png"));
-    assets.no_flag = server.load("flags/No_flag.png");
 }
 
 fn load_building_assets(

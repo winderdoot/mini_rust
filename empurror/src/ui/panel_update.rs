@@ -1,6 +1,6 @@
-use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*, ui::*};
+use bevy::{color::palettes::{css::*, tailwind::*}, input::keyboard::Key, platform::collections::HashMap, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::*, province::*, resources::*}, scene::{assets::*, hex_grid::*}, ui::panels::*};
+use crate::{game_logic::{empire::*, province::*, resources::*, turns::Turns}, scene::{assets::*, hex_grid::*}, ui::panels::*};
 
 pub fn resource_str(map: &HashMap<ResourceType, f32>) -> String {
     map
@@ -8,6 +8,18 @@ pub fn resource_str(map: &HashMap<ResourceType, f32>) -> String {
         .map(|(k ,v)| format!("{}: {}", *k, *v))
         .collect::<Vec<String>>()
         .join(" ")
+}
+
+pub fn income_color(val: f32) -> Color {
+    if val == 0.0 {
+        Color::Srgba(WHITE)
+    }
+    else if val > 0.0 {
+        Color::Srgba(LIMEGREEN)
+    }
+    else {
+        Color::Srgba(ROSE_500)
+    }
 }
 
 /// Horrible, horrible code
@@ -110,6 +122,7 @@ fn update_claims_panel(
     )>,
     commands: &mut Commands,
     grid: &Res<HexGrid>,
+    turns: &Res<Turns>
 ) {
     let Some(player_empire) = empires.player_empire() else {
         error!("Player empire not found!");
@@ -198,7 +211,8 @@ fn update_detailed_province_panel(
         Single<Entity, With<BuildHouseButton>>,
         Single<Entity, With<BuildResourceBuildingButton>>,
     )>,
-    commands: &mut Commands
+    commands: &mut Commands,
+    turns: &Res<Turns>
 ) {
     let income = prov.get_income();
     let income_text = &mut *text.p3();
@@ -233,14 +247,14 @@ fn update_detailed_province_panel(
 
     /* Can we build a special/resource building */
     let button = *buttons.p2();
-    let can_build = prov
+    let can_afford = prov
         .special_building_type()
         .as_ref()
         .map(SpecialBuilding::build_cost)
         .map(|cost| empire.can_afford(&cost))
         .unwrap_or(false);
 
-    if !can_build {
+    if !can_afford || !prov.can_build_special_building(){
         commands
             .entity(button)
             .insert(InteractionDisabled);
@@ -262,8 +276,8 @@ pub fn assign_residents_interaction(
     mut q_empires: Query<&mut Empire>,
     mut q_provinces: Query<&mut Province>,
     empires: Res<Empires>,
-    mut text: Single<&mut Text, With<UIResidentsText>>,
-    mut commands: Commands
+    mut commands: Commands,
+    turns: Res<Turns>
 ) {
     if panel_node.display != Display::Flex {
         return;
@@ -295,6 +309,7 @@ pub fn assign_residents_interaction(
         empire_c.add_free_pop();
     }
 
+    commands.trigger(ProvinceIncomeChanged { province: prov_ent });
     commands.trigger(ResourceIncomeChanged { empire: *player_empire });
     commands.trigger(PopsIncomeChanged { empire: *player_empire });
 }
@@ -335,6 +350,7 @@ pub fn update_province_panel_group(
     )>,
     mut commands: Commands,
     grid: Res<HexGrid>,
+    turns: Res<Turns>
 ) {
     match *picked {
         PickedProvince::None => {
@@ -351,7 +367,7 @@ pub fn update_province_panel_group(
             };
             /* Claim province button */
             let Some(controlled_by) = controlled_by else {
-                update_claims_panel(&selected, &q_empire, &q_provinces, &q_prov_trans, &q_prov_owner, &empires, &mut nodes, &mut buttons, &mut commands, &grid);
+                update_claims_panel(&selected, &q_empire, &q_provinces, &q_prov_trans, &q_prov_owner, &empires, &mut nodes, &mut buttons, &mut commands, &grid, &turns);
                 return;
             };
             let Ok((empire_c, _)) = q_empire.get(controlled_by.0) else {
@@ -361,7 +377,7 @@ pub fn update_province_panel_group(
                 return;
             }
             /* Display/modify detailed province panel */
-            update_detailed_province_panel(prov, &empire_c, &mut nodes, &mut text, &mut buttons, &mut commands);
+            update_detailed_province_panel(prov, &empire_c, &mut nodes, &mut text, &mut buttons, &mut commands, &turns);
         },
     }
 }
@@ -371,7 +387,7 @@ pub fn update_treasury_panel(
     q_empires: Query<&Empire>,
     mut s_text: ParamSet<(
         Query<(&mut Text, &UIResourceTotalText)>,
-        Query<(&mut Text, &UIResourceIncomeText)>,
+        Query<(&mut Text, &mut TextColor, &UIResourceIncomeText)>,
     )>
 ) {
     let Some(player_empire) = empires.get_entity(PLAYER_EMPIRE) else {
@@ -401,15 +417,17 @@ pub fn update_treasury_panel(
     let income_text = &mut s_text.p1();
     income_text
         .iter_mut()
-        .for_each(|(mut text, resource)| {
+        .for_each(|(mut text, mut color, resource)| {
             match resource.0 {
                 UIResourceType::Regular(inner) => {
-                    let total = empire_c.get_total(&inner);
-                    text.0 = format_income(total);
+                    let income = empire_c.get_income(&inner);
+                    text.0 = format_income(income);
+                    color.0 = income_color(income);
                 },
                 UIResourceType::Pops => {
-                    let total = empire_c.get_pops();
-                    text.0 = format_income(total as f32);
+                    let income = empire_c.get_pops_income();
+                    text.0 = format_income(income as f32);
+                    color.0 = income_color(income as f32);
                 },
             }
         });

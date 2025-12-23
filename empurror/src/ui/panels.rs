@@ -19,6 +19,7 @@ const PANEL_COLOR_TR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 0.5);
 pub const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
 pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
 pub const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
+pub const BUTTON_COLOR_DISABLED: Color = Color::linear_rgba(0.05, 0.05, 0.05, 1.0);
 
 /* Reource/Component definitions */
 
@@ -430,14 +431,14 @@ pub fn spawn_end_turn_button(
 
     let container = (
         Node {
-            display: Display::None,
+            display: Display::Flex,
             width: auto(),
             height: auto(),
             position_type: PositionType::Absolute,
             right: px(0),
-            top: px(0),
+            bottom: px(0),
             /* Children */
-            align_items: AlignItems::End,
+            align_items: AlignItems::Start,
             flex_direction: FlexDirection::ColumnReverse,
             row_gap: px(10),
             padding: UiRect::new(px(0), TPL_PADDING, TPL_PADDING, TPL_PADDING),
@@ -452,15 +453,15 @@ pub fn spawn_end_turn_button(
 }
 
 pub fn format_resource(val: f32) -> String {
-    format!("{:.0}", val)
+    format!("{:.1}", val)
 }
 
 pub fn format_income(val: f32) -> String {
     if val >= 0.0 {
-        format!("+ {:.0}", val.abs())
+        format!("+ {:.1}", val.abs())
     }
     else {
-        format!("- {:.0}", val.abs())
+        format!("- {:.1}", val.abs())
     }
 }
 

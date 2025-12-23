@@ -91,6 +91,10 @@ impl Empire {
         self.resource_income.get(typ).cloned().unwrap_or(0.0)
     }
 
+    pub fn get_pops_income(&self) -> u32 {
+        self.pops_income
+    }
+
     pub fn has_free_pops(&self) -> bool {
         self.pops_free > 0
     }
@@ -117,6 +121,8 @@ impl Empire {
             let new_total = self.get_total(k) + *v;
             self.resource_total.insert(*k, new_total);
         }
+        self.pops_total += self.pops_income;
+        self.pops_free += self.pops_income;
     }
 }
 
@@ -157,7 +163,28 @@ pub struct PopsIncomeChanged {
 }
 
 /* Systems */
-pub fn calculate_empire_resource_income(
+/// Used in special situations (startup) to force all provinces to recalculate their income/upkeep. Would be faster with exclusive world access
+/// but there aren't many controlled provinces at the start so whatever.
+pub fn calculate_all_provinces_income(
+    q_empires: Query<(Entity, &Controls), With<Empire>>,
+    mut commands: Commands
+) {
+    q_empires
+        .iter()
+        .for_each(|(empire, controls)| {
+            controls
+                .get_provinces()
+                .for_each(|province| {
+                    commands.trigger(ProvinceIncomeChanged { province: *province });
+                });
+
+            // This is not neccessary, because we do it at the beginning of each turn
+            // commands.trigger(ResourceIncomeChanged { empire });
+            // commands.trigger(PopsIncomeChanged { empire });
+        });
+}
+
+pub fn calculate_empire_resource_net_income(
     event: On<ResourceIncomeChanged>,
     mut q_empires: Query<(&mut Empire, &Controls)>,
     q_provinces: Query<&Province>
@@ -169,12 +196,20 @@ pub fn calculate_empire_resource_income(
     empire_c.resource_income = controls.0
         .iter()
         .flat_map(|p_ent| q_provinces.get(*p_ent))
-        .map(|province| province.get_income())
-        .fold(HashMap::<ResourceType, f32>::new(), |total, income| {
+        .map(|province| (province.get_income(), province.get_upkeep()))
+        .map(|(income, upkeep)| {
             ResourceType::iter()
                 .map(|typ| {
-                    let combined = resource_amount(&total, &typ) + resource_amount(&income, &typ);
-
+                    let typ_income = resource_amount(&income, &typ);
+                    let typ_cost = resource_amount(&upkeep, &typ);
+                    (typ, typ_income - typ_cost)
+                })
+                .collect()
+        })
+        .fold(HashMap::<ResourceType, f32>::new(), |total, net_income| {
+            ResourceType::iter()
+                .map(|typ| {
+                    let combined = resource_amount(&total, &typ) + resource_amount(&net_income, &typ);
                     (typ, combined)
                 })
                 .collect()
@@ -306,7 +341,6 @@ fn assign_provinces(
 
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: plains_ent.clone() });
             commands.trigger(ProvinceClaimed { empire: empire.clone(), province: woods_ent.clone() });
-            // commands.trigger();
             break;
         }
     }
