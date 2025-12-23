@@ -54,6 +54,7 @@ pub fn update_claim_button(
     mut text_query: Query<&mut Text>,
     pick: Res<PickedProvince>,
     empires: Res<Empires>,
+    mut q_empires: Query<&mut Empire>,
     mut commands: Commands
 ) {
     let (pressed, hovered, disabled, color, children) = &mut *button;
@@ -73,7 +74,14 @@ pub fn update_claim_button(
             error!("Missing player empire");
             return;
         };
-    
+        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+        let cost = House::build_cost();
+        /* Assume that validation of this action happened before */
+        empire_c.remove_resources(&cost);
+
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(ProvinceClaimed { empire: *player_empire, province });
         commands.trigger(ProvinceIncomeChanged { province });
@@ -96,6 +104,8 @@ pub fn update_build_house_button(
     button_ent: Single<Entity, With<BuildHouseButton>>,
     mut text_query: Query<&mut Text>,
     pick: Res<PickedProvince>,
+    empires: Res<Empires>,
+    mut q_empires: Query<&mut Empire>,
     mut commands: Commands,
 ) {
     let (pressed, hovered, disabled, color, children) = &mut *button;
@@ -111,6 +121,16 @@ pub fn update_build_house_button(
             error!("Missing selected province!");
             return;
         };
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
+            return;
+        };
+        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+        let cost = House::build_cost();
+        empire_c.remove_resources(&cost);
 
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(HouseAdded { province });
@@ -132,6 +152,8 @@ pub fn update_build_resource_building_button(
     mut text_query: Query<&mut Text>,
     pick: Res<PickedProvince>,
     q_provinces: Query<(&Province, &ControlledBy)>,
+    empires: Res<Empires>,
+    mut q_empires: Query<&mut Empire>,
     mut commands: Commands,
 ) {
     let (pressed, hovered, disabled, color, children) = &mut *button;
@@ -153,8 +175,9 @@ pub fn update_build_resource_building_button(
             .map(|(p, _)| p.special_building_type())
             .unwrap_or(Some(SpecialBuilding::Farm))
             .unwrap_or(SpecialBuilding::Farm);
+    let build_cost = building_type.build_cost();
 
-    let button_text = format!("Build {} ({})", building_name, resource_str(&building_type.build_cost()));
+    let button_text = format!("Build {} ({})", building_name, resource_str(&build_cost));
     set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
 
     if pressed.is_some() && !disabled.is_some() {
@@ -162,13 +185,20 @@ pub fn update_build_resource_building_button(
             error!("Missing selected province!");
             return;
         };
-        let Ok((_, controlled_by)) = q_provinces.get(province) else {
-            error!("Missing components");
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
             return;
         };
+        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+
+        empire_c.remove_resources(&build_cost);
+
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(SpecialBuildingAdded { province });
         commands.trigger(ProvinceIncomeChanged { province });
-        commands.trigger(ResourceIncomeChanged { empire: controlled_by.0 });
+        commands.trigger(ResourceIncomeChanged { empire: *player_empire });
     }
 }

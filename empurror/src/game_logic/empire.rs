@@ -102,6 +102,15 @@ impl Empire {
                 self.get_total(k) >= *v
             })
     }
+
+    pub fn remove_resources(&mut self, cost: &HashMap<ResourceType, f32>) {
+        cost
+            .iter()
+            .for_each(|(k, v)| {
+                let new_total = self.get_total(k) - v;
+                self.resource_total.insert(*k, new_total);
+            });
+    }
 }
 
 /// Only used a single time, when so that we can insert the number of provinces into the system that spawns them
