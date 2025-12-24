@@ -1,11 +1,18 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, input::keyboard::Key, platform::collections::HashMap, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::*, province::*, resources::*, turns::Turns}, scene::{assets::*, hex_grid::*}, ui::panels::*};
+use crate::{game_logic::{armies::SoldierType, empire::*, province::*, resources::*, turns::Turns}, scene::{assets::*, hex_grid::*}, ui::panels::*};
 
 pub fn resource_str(map: &HashMap<ResourceType, f32>) -> String {
     map
         .iter()
-        .map(|(k ,v)| format!("{}: {}", *k, *v))
+        .map(|(k, v)| {
+            if *v > 0.0 {
+                format!("{}: {}", *k, *v)
+            }
+            else {
+                String::new()
+            } 
+        })
         .collect::<Vec<String>>()
         .join(" ")
 }
@@ -69,7 +76,7 @@ fn update_basic_province_panel(
             flag = Some(empire_assets.flags[empire_c.id as usize].clone());
         } 
         else {
-            error!("Empire entity not found!");
+            error!("{}:{} Empire entity not found!", file!(), line!());
             return;
         }
     } 
@@ -125,7 +132,7 @@ fn update_claims_panel(
     turns: &Res<Turns>
 ) {
     let Some(player_empire) = empires.player_empire() else {
-        error!("Player empire not found!");
+        error!("{}:{} Player empire not found!", file!(), line!());
         return;
     };
     let Ok(t) = q_prov_trans.get(*province) else {
@@ -156,12 +163,12 @@ fn update_claims_panel(
     }
 
     let Ok((_, _, _)) = q_provinces.get(*province) else {
-        error!("Province entity lacks province component");
+        error!("{}:{} Province entity lacks province component", file!(), line!());
         return;
     };
 
     let Ok((empire_c, _)) = q_empire.get(*player_empire) else {
-        error!("Empire component missing");
+        error!("{}:{} Empire component missing", file!(), line!());
         return;
     };
     let claim_button = *buttons.p0();
@@ -228,7 +235,12 @@ fn update_detailed_province_panel(
     houses_text.0 = format!("Houses: {}/{}", prov.get_houses(), MAX_HOUSES);
 
     let residents_text = &mut *text.p6();
-    residents_text.0 = format!("Assign residents:\n- {}/{} +", prov.get_pops(), prov.get_max_pops());
+    if prov.has_castle() {
+        residents_text.0 = String::new();
+    }
+    else {
+        residents_text.0 = format!("Assign residents:\n- {}/{} +", prov.get_pops(), prov.get_max_pops());
+    }
     
     let house_button = *buttons.p1();
     let house_cost = House::build_cost();
@@ -294,12 +306,15 @@ pub fn assign_residents_interaction(
     let Ok(mut prov) = q_provinces.get_mut(prov_ent) else {
         return;
     };
+    if prov.has_castle() {
+        return;
+    }
     let Some(player_empire) = empires.get_entity(PLAYER_EMPIRE) else {
-        error!("Missing player empirr entity");
+        error!("{}:{} Missing player empirr entity", file!(), line!());
         return;
     };
     let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
-        error!("Missing player empire component");
+        error!("{}:{} Missing player empire component", file!(), line!());
         return;
     };
     if increase && empire_c.has_free_pops() {
@@ -382,6 +397,90 @@ pub fn update_province_panel_group(
     }
 }
 
+/* Also handles the castle button  */
+pub fn update_recruit_panel(
+    picked: Res<PickedProvince>,
+    q_provinces: Query<(&Province, &ControlledBy)>,
+    q_empires: Query<&Empire>,
+    mut nodes: ParamSet<(
+        Single<&mut Node, With<RecruitPanel>>,
+        Single<&mut Node, With<BuildCastleButton>>,
+        Single<&mut Node, With<RecruitSoldierButton>>,
+    )>,
+    mut text: ParamSet<(
+        Single<&mut Text, With<UISoldiersText>>,
+    )>,
+    mut buttons: ParamSet<(
+        Single<Entity, With<RecruitSoldierButton>>,
+        Single<Entity, With<BuildCastleButton>>,
+    )>,
+    mut commands: Commands,
+    turns: Res<Turns>
+) {
+    let castle_button = &mut *nodes.p1();
+    castle_button.display = Display::None;
+    let recruit_panel = &mut *nodes.p0();
+    recruit_panel.display = Display::None;
+
+    let PickedProvince::Selected(province) = *picked else {
+        return;
+    };
+    let Ok((province_c, controlled_by)) = q_provinces.get(province) else {
+        return;
+    };
+    /* I discovered you can call .entity() on these wrapper structs with entities */
+    let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
+        return;
+    };
+    if empire_c.id != PLAYER_EMPIRE {
+        return;
+    }
+    if !province_c.has_special_building() {
+        /* We can display build castle button */
+        let castle_button = &mut *nodes.p1();
+        castle_button.display = Display::Flex;
+        let castle_button_ent = *buttons.p1();
+
+        let castle_cost = SpecialBuilding::Castle.build_cost();
+        if empire_c.can_afford(&castle_cost) {
+            commands
+                .entity(castle_button_ent)
+                .remove::<InteractionDisabled>();
+        }
+        else {
+            commands
+                .entity(castle_button_ent)
+                .insert(InteractionDisabled);
+        }
+        return;
+    }
+    else if !province_c.has_castle() {
+        return;
+    }
+
+    let recruit_panel = &mut *nodes.p0();
+    recruit_panel.display = Display::Flex;
+
+    let soldiers_text = &mut *text.p0();
+    soldiers_text.0 = format!("Recruited soldiers: {}/{}", province_c.get_pops(), province_c.get_max_pops());
+
+    let recruit_button = &mut *nodes.p2();
+    recruit_button.display = Display::Flex;
+    let recruit_button_ent = *buttons.p0();
+
+    let recruit_cost = SoldierType::Infantry.recruit_cost();
+    if empire_c.can_afford(&recruit_cost) && empire_c.has_free_pops() {
+        commands
+            .entity(recruit_button_ent)
+            .remove::<InteractionDisabled>();
+    }
+    else {
+        commands
+            .entity(recruit_button_ent)
+            .insert(InteractionDisabled);
+    }
+}
+
 pub fn update_treasury_panel(
     empires: Res<Empires>,
     q_empires: Query<&Empire>,
@@ -391,12 +490,12 @@ pub fn update_treasury_panel(
     )>
 ) {
     let Some(player_empire) = empires.get_entity(PLAYER_EMPIRE) else {
-        error!("Missing player empire entity");
+        error!("{}:{} Missing player empire entity", file!(), line!());
         return;
     };
 
     let Ok(empire_c) = q_empires.get(*player_empire) else {
-        error!("Missing player empire component");
+        error!("{}:{} Missing player empire component", file!(), line!());
         return;
     };
     let total_text = &mut s_text.p0();
@@ -409,7 +508,7 @@ pub fn update_treasury_panel(
                     text.0 = format_resource(total);
                 },
                 UIResourceType::Pops => {
-                    text.0 = format!("{}, free: {}", empire_c.get_pops(), empire_c.get_free_pops());
+                    text.0 = format!("{}, free: {}, soldiers: {}", empire_c.get_pops(), empire_c.get_free_pops(), empire_c.get_soldiers());
                 },
             }
         });
@@ -433,3 +532,8 @@ pub fn update_treasury_panel(
         });
 }
 
+pub fn update_units_panel(
+
+) {
+
+}

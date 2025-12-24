@@ -1,7 +1,7 @@
 use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
 use strum::IntoEnumIterator;
 
-use crate::game_logic::{province::*, resources::ResourceType};
+use crate::game_logic::{armies::*, province::*, resources::ResourceType};
 use crate::scene::hex_grid::{HexGrid};
 use crate::game_systems::*;
 
@@ -32,6 +32,7 @@ pub struct Empire {
     pub pops_total: u32,
     pub pops_free: u32,
     pub pops_income: u32,
+    pub soldiers: u32,
 }
 
 pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> f32 {
@@ -57,8 +58,17 @@ impl Empire {
             resource_income: Default::default(),
             pops_total: 2,
             pops_free: 2,
-            pops_income: 0
+            pops_income: 0,
+            soldiers: 0
         }
+    }
+
+    pub fn get_soldiers(&self) -> u32 {
+        self.soldiers
+    }
+
+    pub fn add_soldier(&mut self) {
+        self.soldiers += 1;
     }
 
     pub fn get_pops(&self) -> u32 {
@@ -81,6 +91,10 @@ impl Empire {
 
     pub fn add_free_pop(&mut self) {
         self.pops_free += 1
+    }
+
+    pub fn add_free_pops(&mut self, amount: u32) {
+        self.pops_free += amount
     }
 
     pub fn get_total(&self, typ: &ResourceType) -> f32 {
@@ -146,13 +160,12 @@ impl Empires {
     }
 }
 
-/* Events */
+/* Gameplay Events */
 #[derive(Event, Debug)]
 pub struct ProvinceClaimed {
     pub empire: Entity,
     pub province: Entity
 }
-
 #[derive(Event, Debug)]
 pub struct ResourceIncomeChanged {
     pub empire: Entity
@@ -161,8 +174,40 @@ pub struct ResourceIncomeChanged {
 pub struct PopsIncomeChanged {
     pub empire: Entity
 }
+#[derive(Event, Debug)]
+pub struct SoldierRecruited {
+    pub soldier: SoldierType,
+    pub empire: Entity,
+    pub province: Entity
+}
 
 /* Systems */
+pub fn recruit_soldier(
+    event: On<SoldierRecruited>,
+    mut q_provinces: Query<&mut Province>,
+    mut q_empires: Query<&mut Empire>,
+    mut commands: Commands
+) {
+    let Ok(mut empire_c) = q_empires.get_mut(event.empire) else {
+        error!("{}:{} Missing empire comonent", file!(), line!());
+        return;
+    };
+    let Ok(mut province_c) = q_provinces.get_mut(event.province) else {
+        error!("{}:{} Missing province comonent", file!(), line!());
+        return;
+    };
+
+    /* We already know these should succeed */
+    empire_c.remove_resources(&event.soldier.recruit_cost());
+    empire_c.try_remove_free_pop();
+    empire_c.add_soldier();
+    province_c.try_add_pop();
+
+    commands.trigger(ProvinceIncomeChanged { province: event.province });
+    commands.trigger(ResourceIncomeChanged { empire: event.empire });
+    commands.trigger(PopsIncomeChanged { empire: event.empire });
+}
+
 /// Used in special situations (startup) to force all provinces to recalculate their income/upkeep. Would be faster with exclusive world access
 /// but there aren't many controlled provinces at the start so whatever.
 pub fn calculate_all_provinces_income(
@@ -171,7 +216,7 @@ pub fn calculate_all_provinces_income(
 ) {
     q_empires
         .iter()
-        .for_each(|(empire, controls)| {
+        .for_each(|(_, controls)| {
             controls
                 .get_provinces()
                 .for_each(|province| {

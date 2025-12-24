@@ -84,6 +84,20 @@ pub struct UIResourceTotalText(pub UIResourceType);
 #[derive(Component)]
 pub struct EndTurnButton;
 
+/* Castle and recruitment */
+#[derive(Component)]
+pub struct BuildCastleButton;
+#[derive(Component)]
+pub struct RecruitPanel;
+#[derive(Component)]
+pub struct UISoldiersText;
+#[derive(Component)]
+pub struct RecruitSoldierButton;
+
+/* Units Panel */
+#[derive(Component)]
+pub struct UnitsPanel;
+
 /* Systems */
 
 fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
@@ -367,6 +381,83 @@ fn province_claim_panel() -> impl Bundle {
     container
 }
 
+fn build_castle_button() -> impl Bundle {
+    (
+        Node {
+            display: Display::None,
+            border: UiRect::all(px(2)),
+            padding: UiRect::all(px(5)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        BuildCastleButton,
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        BorderColor::all(Color::WHITE),
+        BorderRadius::all(px(15)),
+        BackgroundColor(BUTTON_COLOR),
+        children![(
+            Text::new("Build Castle"),
+            TextFont {
+                font_size: 22.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )],
+    )
+}
+
+fn recruit_panel() -> impl Bundle {
+    let units = (
+        UISoldiersText,
+        Text::new("Soldiers 0/15"),
+        TextFont { 
+            font_size: 18.0,
+            ..Default::default()
+        },
+        TextColor(Color::WHITE),
+        TextLayout::new_with_justify(Justify::Left),
+    );
+    let recruit_button = (
+        Node {
+            display: Display::None,
+            border: UiRect::all(px(2)),
+            padding: UiRect::all(px(5)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        RecruitSoldierButton,
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        BorderColor::all(Color::WHITE),
+        BorderRadius::all(px(15)),
+        BackgroundColor(BUTTON_COLOR),
+        children![(
+            Text::new("Recruit Soldier"),
+            TextFont {
+                font_size: 22.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )],
+    );
+
+    let container = (
+        RecruitPanel,
+        rounded_container(FlexDirection::Column, px(5)),
+        children![
+            units,
+            recruit_button
+        ]
+    );
+
+    container
+}
+
 pub fn spawn_province_panel_group(
     empire_assets: Res<EmpireAssets>,
     mut commands: Commands
@@ -374,6 +465,8 @@ pub fn spawn_province_panel_group(
     let hover = province_hover_panel(&empire_assets);
     let detail = province_detail_panel();
     let claim = province_claim_panel();
+    let castle_button = build_castle_button();
+    let units = recruit_panel();
 
     let container = (
         UIProvincePanel,
@@ -394,7 +487,9 @@ pub fn spawn_province_panel_group(
         children![
             hover,
             detail,
-            claim
+            claim,
+            castle_button,
+            units
         ]
     );
 
@@ -577,4 +672,32 @@ pub fn spawn_treasury_panel(
     );
 
     commands.spawn(main_panel);
+}
+
+
+pub fn spawn_units_panel_group(
+    mut commands: Commands
+) {
+    let container = (
+        UnitsPanel,
+        Node {
+            display: Display::None,
+            width: auto(),
+            height: auto(),
+            position_type: PositionType::Absolute,
+            left: px(0),
+            top: px(50),
+            /* Children */
+            align_items: AlignItems::End,
+            flex_direction: FlexDirection::Column,
+            row_gap: px(10),
+            padding: UiRect::new(px(0), TPL_PADDING, TPL_PADDING, TPL_PADDING),
+            ..Default::default()
+        },
+        children![
+
+        ]
+    );
+
+    commands.spawn(container);
 }

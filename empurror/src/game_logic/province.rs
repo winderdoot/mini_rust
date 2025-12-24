@@ -1,8 +1,9 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMap, prelude::*};
+use core::fmt;
 use std::{cmp::{Eq, min}, f32::consts::PI};
-use strum_macros::EnumIter;
+use strum_macros::{Display, EnumIter};
 
-use crate::game_logic::{empire::Controls, resources::ResourceType};
+use crate::game_logic::{armies::{Soldier, SoldierType}, empire::Controls, resources::ResourceType};
 use crate::scene::assets::Models;   
 use crate::scene::{hex_grid, mesh_highlight::*};
 
@@ -57,27 +58,6 @@ impl ProvinceType {
             ProvinceType::Mountains => 0.35,
         }
     }
-
-    // pub fn resource_building_cost(&self) -> HashMap<ResourceType, f32> {
-    //     match self {
-    //         ProvinceType::BlackSoil | ProvinceType::Plains => {
-    //             [(ResourceType::Lumber, 10.0)].into()
-    //         },
-    //         ProvinceType::Woods => {
-    //             [(ResourceType::Lumber, 15.0)].into()
-    //         },
-    //         ProvinceType::Hills => {
-    //             [(ResourceType::Lumber, 20.0)].into()
-    //         },
-    //         ProvinceType::Mountains => {
-    //             [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into()
-    //         },
-    //         _ => {
-    //             error!("Invalid province type");
-    //             return Default::default();
-    //         }
-    //     }
-    // }
 }
 
 #[derive(Component)]
@@ -90,6 +70,7 @@ pub struct Province {
     max_pops: u32,
     upkeep: HashMap<ResourceType, f32>,
     income: HashMap<ResourceType, f32>,
+    soldiers: Vec<Soldier>, /* Free soldiers unassigned to armies */
 }
 
 impl Province {
@@ -103,7 +84,31 @@ impl Province {
             max_pops: 0,
             upkeep: Default::default(),
             income: Default::default(),
+            soldiers: Default::default()
         }
+    }
+
+    pub fn soldiers_iter(&self) -> impl Iterator<Item = &Soldier> {
+        self.soldiers.iter()
+    }
+
+    pub fn try_remove_soldier(&mut self, typ: &SoldierType) -> Option<Soldier> {
+        let Some(ind) = self.soldiers
+            .iter()
+            .enumerate()
+            .find_map(|(i, s)| {
+                if s.stype == *typ {
+                    Some(i)
+                }
+                else {
+                    None
+                }
+            }) 
+            else {
+                return None;
+            };
+
+        Some(self.soldiers.remove(ind))
     }
 
     pub fn building_name(&self) -> String {
@@ -155,7 +160,8 @@ impl Province {
     }
 
     pub fn can_build_special_building(&self) -> bool {
-        if self.special_building {
+        /* Castle is also a special building, so this is overkill */
+        if self.special_building || self.castle {
             false
         }
         else if let ProvinceType::Desert | ProvinceType::Water = self.ptype {
@@ -166,6 +172,14 @@ impl Province {
         }
     }
 
+    pub fn has_castle(&self) -> bool {
+        self.castle
+    }
+
+    pub fn has_special_building(&self) -> bool {
+        self.special_building
+    }
+    
     pub fn get_houses(&self) -> u32 {
         self.house_count
     }
@@ -217,6 +231,10 @@ impl Province {
     }
 
     fn base_income(&self) -> HashMap<ResourceType, f32> {
+        if self.castle {
+            return HashMap::new();
+        }
+
         match self.ptype {
             ProvinceType::BlackSoil => {
                 return [(ResourceType::Grain, self.pops as f32 * 2.25)].into();
@@ -272,7 +290,7 @@ impl House {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug, Display)]
 pub enum SpecialBuilding {
     Farm,
     LumberMill,
@@ -314,7 +332,7 @@ impl SpecialBuilding {
             SpecialBuilding::LumberMill => [(ResourceType::Lumber, 15.0)].into(),
             SpecialBuilding::StoneMine => [(ResourceType::Lumber, 20.0)].into(),
             SpecialBuilding::GoldMine => [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into(),
-            SpecialBuilding::Castle => [(ResourceType::Lumber, 30.0), (ResourceType::Stone, 40.0)].into(),
+            SpecialBuilding::Castle => [(ResourceType::Lumber, 10.0), (ResourceType::Stone, 1.0)].into(),
         }
     }
 }
@@ -433,6 +451,11 @@ pub fn add_special_building(
     }
     prov.special_building = true;
     prov.castle = event.castle;
+
+    if event.castle {
+        /* Resettle all non soldier pops */
+        prov.pops = 0;
+    }
 
     let transl = Vec3::new(0.0, 0.5, 0.0);
     let desired = Transform::from_translation(transl);

@@ -1,6 +1,6 @@
 use bevy::{picking::hover::Hovered, prelude::*, ui::*};
 
-use crate::{game_logic::{empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
+use crate::{game_logic::{armies::SoldierType, empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
 
 fn set_button_style(
     mess: &str,
@@ -197,6 +197,122 @@ pub fn update_build_resource_building_button(
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(SpecialBuildingAdded { province, castle: false }); /* Causes the province to calculate it's income too */
         commands.trigger(ResourceIncomeChanged { empire: *player_empire });
+    }
+}
+
+pub fn update_build_castle_button(
+    mut button: Single<
+        (
+            Option<&Pressed>,
+            &Hovered,
+            Option<&InteractionDisabled>,
+            &mut BackgroundColor,
+            &Children,
+        ),
+        With<BuildCastleButton>
+    >,
+    button_ent: Single<Entity, With<BuildCastleButton>>,
+    mut text_query: Query<&mut Text>,
+    pick: Res<PickedProvince>,
+    q_provinces: Query<&Province>,
+    empires: Res<Empires>,
+    mut q_empires: Query<&mut Empire>,
+    mut commands: Commands,
+) {
+    let (pressed, hovered, disabled, color, children) = &mut *button;
+    let Ok(mut text) = text_query.get_mut(children[0]) else {
+        return;
+    };
+    
+    let PickedProvince::Selected(prov) = *pick else {
+        return;
+    };
+    let build_cost = SpecialBuilding::Castle.build_cost();
+
+    let button_text = format!("Build {} ({})", SpecialBuilding::Castle, resource_str(&build_cost));
+    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
+
+    if pressed.is_some() && !disabled.is_some() {
+        let PickedProvince::Selected(province) = *pick else {
+            error!("Missing selected province!");
+            return;
+        };
+        let Ok(province_c) = q_provinces.get(province) else {
+            error!("Missing province component");
+            return;
+        };
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
+            return;
+        };
+        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+
+        empire_c.remove_resources(&build_cost);
+        /* A bit hacky, whatever  */
+        empire_c.add_free_pops(province_c.get_pops());
+
+        commands.entity(*button_ent).remove::<Pressed>();
+        commands.trigger(SpecialBuildingAdded { province, castle: true }); /* Causes the province to calculate it's income too */
+        commands.trigger(ResourceIncomeChanged { empire: *player_empire });
+        commands.trigger(PopsIncomeChanged { empire: *player_empire });
+    }
+}
+
+pub fn update_recruit_button(
+    mut button: Single<
+        (
+            Option<&Pressed>,
+            &Hovered,
+            Option<&InteractionDisabled>,
+            &mut BackgroundColor,
+            &Children,
+        ),
+        With<RecruitSoldierButton>
+    >,
+    button_ent: Single<Entity, With<RecruitSoldierButton>>,
+    mut text_query: Query<&mut Text>,
+    pick: Res<PickedProvince>,
+    q_provinces: Query<&Province>,
+    empires: Res<Empires>,
+    mut q_empires: Query<&mut Empire>,
+    mut commands: Commands,
+) {
+    let (pressed, hovered, disabled, color, children) = &mut *button;
+    let Ok(mut text) = text_query.get_mut(children[0]) else {
+        return;
+    };
+    
+    let PickedProvince::Selected(prov) = *pick else {
+        return;
+    };
+    let recruit_cost = SoldierType::Infantry.recruit_cost();
+
+    let button_text = format!("Recruit {} ({})", SoldierType::Infantry, resource_str(&recruit_cost));
+    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
+
+    if pressed.is_some() && !disabled.is_some() {
+        let PickedProvince::Selected(province) = *pick else {
+            error!("Missing selected province!");
+            return;
+        };
+        let Ok(province_c) = q_provinces.get(province) else {
+            error!("Missing province component");
+            return;
+        };
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
+            return;
+        };
+        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+            error!("Player empire component missing");
+            return;
+        };
+
+        commands.entity(*button_ent).remove::<Pressed>();
+        commands.trigger(SoldierRecruited { soldier: SoldierType::Infantry, empire: *player_empire, province })
     }
 }
 

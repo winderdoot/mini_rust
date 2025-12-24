@@ -6,3 +6,4 @@ pub mod recently_moved;
 pub mod turns;
 pub mod events;
 pub mod resources;
+pub mod armies;
