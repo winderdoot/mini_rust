@@ -46,7 +46,9 @@ impl Plugin for GameUIPlugin {
                     update_build_castle_button,
                     update_recruit_button,
                     update_end_turn_button,
-                    update_units_panel
+                    update_armies_panel,
+                    update_create_army_button,
+                    update_disband_army_button
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )

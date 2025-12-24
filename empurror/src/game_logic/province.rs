@@ -1,11 +1,11 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMap, prelude::*};
-use core::fmt;
+
 use std::{cmp::{Eq, min}, f32::consts::PI};
 use strum_macros::{Display, EnumIter};
 
-use crate::game_logic::{armies::{Soldier, SoldierType}, empire::Controls, resources::ResourceType};
+use crate::game_logic::{armies::{Army, ArmyProvince, Soldier, SoldierType}, empire::{Controls, Empire}, resources::ResourceType};
 use crate::scene::assets::Models;   
-use crate::scene::{hex_grid, mesh_highlight::*};
+use crate::scene::{hex_grid};
 
 pub const MAX_HOUSES: u32 = 3;
 
@@ -88,11 +88,27 @@ impl Province {
         }
     }
 
+    pub fn has_pops_room(&self) -> bool {
+        self.pops < self.max_pops
+    }
+
+    pub fn soldier_count(&self) -> usize {
+        self.soldiers.len()
+    }
+
+    pub fn add_soldier(&mut self, soldier: Soldier) {
+        self.soldiers.push(soldier);
+    }
+
     pub fn soldiers_iter(&self) -> impl Iterator<Item = &Soldier> {
         self.soldiers.iter()
     }
 
-    pub fn try_remove_soldier(&mut self, typ: &SoldierType) -> Option<Soldier> {
+    pub fn try_remove_soldier(&mut self) -> Option<Soldier> {
+        self.soldiers.pop()
+    }
+
+    pub fn try_remove_soldier_type(&mut self, typ: &SoldierType) -> Option<Soldier> {
         let Some(ind) = self.soldiers
             .iter()
             .enumerate()
@@ -355,7 +371,71 @@ pub struct ProvinceIncomeChanged {
     pub province: Entity
 }
 
+#[derive(Event, Debug)]
+pub struct ArmyCreated {
+    pub empire: Entity,
+    pub province: Entity
+}
+
+#[derive(Event, Debug)]
+pub struct ArmyDisbanded {
+    pub army: Entity
+}
+
 /* Systems */
+pub fn create_army(
+    event: On<ArmyCreated>,
+    mut q_provinces: Query<&mut Province>,
+    mut q_empires: Query<&mut Empire>,
+    mut commands: Commands
+) {
+    let Ok(mut province_c) = q_provinces.get_mut(event.province) else {
+        error!("{}:{} Missing province component", file!(), line!());
+        return;
+    };
+    let Ok(mut empire_c) = q_empires.get_mut(event.empire) else {
+        error!("{}:{} Missing empire component", file!(), line!());
+        return;
+    };
+    let Some(soldier) = province_c.try_remove_soldier() else {
+        error!("{}:{} Create army called, but no soldiers found in province", file!(), line!());
+        return;
+    };
+    let army = Army::new(soldier, event.empire, empire_c.new_army_id());
+
+    commands
+        .spawn((
+            army,
+            ArmyProvince(event.province)
+        ));
+}
+
+pub fn disband_army(
+    event: On<ArmyDisbanded>,
+    mut q_provinces: Query<&mut Province>,
+    q_armies: Query<(&Army, &ArmyProvince)>,
+    mut commands: Commands
+) {
+    let Ok((army_c, province_e)) = q_armies.get(event.army) else {
+        error!("{}:{} Missing army component", file!(), line!());
+        return;
+    };
+    let Ok(mut province_c) = q_provinces.get_mut(province_e.entity()) else {
+        error!("{}:{} Missing province component", file!(), line!());
+        return;
+    };
+
+    army_c
+        .soldiers_iter()
+        .for_each(|soldier| {
+            province_c.add_soldier(soldier.clone());
+        });
+
+    commands
+        .entity(event.army)
+        .despawn();
+}
+
 // Recalculate all province income/upkeep values
 pub fn calculate_province_income(
     event: On<ProvinceIncomeChanged>,

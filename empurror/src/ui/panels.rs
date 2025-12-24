@@ -20,6 +20,9 @@ pub const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
 pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
 pub const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
 pub const BUTTON_COLOR_DISABLED: Color = Color::linear_rgba(0.05, 0.05, 0.05, 1.0);
+pub const ARMY_DEF_FONTSIZE: f32 = 18.0;
+pub const ARMY_SEL_FONTSIZE: f32 = 20.0;
+pub const ARMY_SEL_COLOR: Color = Color::linear_rgba(0.8, 0.8, 0.8, 1.0);
 
 /* Reource/Component definitions */
 
@@ -29,21 +32,21 @@ pub struct UIProvincePanel;
 pub struct UIDetailedProvincePanel;
 #[derive(Component)]
 pub struct UIBasicProvincePanel;
-#[derive(Component)]
 
 /* Basic panel  */
+#[derive(Component)]
 pub struct UIProvinceFlag;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIProvinceEmpireName;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIProvinceType;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIProvincePopulation;
 
 /* Claim panel */
 #[derive(Component)]
 pub struct UIClaimProvincePanel;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct ClaimProvinceButton;
 
 /* Treasury */
@@ -52,21 +55,21 @@ pub struct TreasuryPanel;
 
 
 /* Detail panel */
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct BuildHouseButton;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct BuildResourceBuildingButton;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIProductionText;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIUpkeepText;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIHousesText;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIBuildHouseText;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIBuildResourceBuildingText;
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct UIResidentsText;
 
 /* Treasury panel */
@@ -75,28 +78,50 @@ pub enum UIResourceType {
     Regular(ResourceType),
     Pops
 }
+
 #[derive(Component)]
 pub struct UIResourceIncomeText(pub UIResourceType);
 #[derive(Component)]
 pub struct UIResourceTotalText(pub UIResourceType);
 
 /* New turn button */
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct EndTurnButton;
 
 /* Castle and recruitment */
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct BuildCastleButton;
 #[derive(Component)]
 pub struct RecruitPanel;
-#[derive(Component)]
-pub struct UISoldiersText;
-#[derive(Component)]
+#[derive(Component, Default)]
+pub struct RecruitedSoldiersText;
+#[derive(Component, Default)]
 pub struct RecruitSoldierButton;
 
-/* Units Panel */
-#[derive(Component)]
-pub struct UnitsPanel;
+/* Units/Armies Panel */
+#[derive(Component, Default)]
+pub struct ArmiesPanel {
+    pub armies: u32,
+    pub curr_army: u32
+}
+
+#[derive(Component, Default)]
+pub struct UnassignedSoldiersText;
+
+#[derive(Component, Default)]
+pub struct ArmyTextPre;
+
+#[derive(Component, Default)]
+pub struct ArmyTextSelected;
+
+#[derive(Component, Default)]
+pub struct ArmyTextPost;
+
+#[derive(Component, Default)]
+pub struct CreateArmyButton;
+
+#[derive(Component, Default)]
+pub struct DisbandArmyButton;
 
 /* Systems */
 
@@ -119,6 +144,53 @@ fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
         BackgroundColor(PANEL_COLOR),
         BorderColor::all(Color::WHITE),
         BorderRadius::all(px(15))
+    )
+}
+
+fn button<T>(display: Display) -> impl Bundle
+where
+    T: Component + Default 
+{
+    (
+        Node {
+            display,
+            border: UiRect::all(px(2)),
+            padding: UiRect::all(px(5)),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        T::default(),
+        Button,
+        Hovered::default(),
+        TabIndex(0),
+        BorderColor::all(Color::WHITE),
+        BorderRadius::all(px(15)),
+        BackgroundColor(BUTTON_COLOR),
+        children![(
+            Text::new("Button text"),
+            TextFont {
+                font_size: 22.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+        )],
+    )
+}
+
+fn text<T>(font_size: f32) -> impl Bundle
+where
+    T: Component + Default 
+{
+    (
+        T::default(),
+        Text::new("Some text"),
+        TextFont { 
+            font_size,
+            ..Default::default()
+        },
+        TextColor(Color::WHITE),
+        TextLayout::new_with_justify(Justify::Left),
     )
 }
 
@@ -151,36 +223,9 @@ fn province_hover_panel(
             
         },
         children![
-            (
-                UIProvinceEmpireName,
-                Text::new("The Mew-nited Syndicate"),
-                TextFont { 
-                   font_size: 20.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            ),
-            (
-                UIProvinceType,
-                Text::new("Plains"),
-                TextFont { 
-                   font_size: 16.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            ),
-            (
-                UIProvincePopulation,
-                Text::new("Population: 0"),
-                TextFont { 
-                   font_size: 16.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            )
+            text::<UIProvinceEmpireName>(20.0),
+            text::<UIProvinceType>(16.0),
+            text::<UIProvincePopulation>(16.0)
         ]
     );
 
@@ -196,64 +241,7 @@ fn province_hover_panel(
     hover_province_panel
 }
 
-fn build_house_button() -> impl Bundle {
-    (
-        Node {
-            border: UiRect::all(px(2)),
-            padding: UiRect::all(px(5)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BuildHouseButton,
-        Button,
-        Hovered::default(),
-        TabIndex(0),
-        BorderColor::all(Color::WHITE),
-        BorderRadius::all(px(15)),
-        BackgroundColor(BUTTON_COLOR),
-        children![(
-            Text::new("Build House"),
-            TextFont {
-                font_size: 22.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-        )],
-    )
-}
-
-fn build_resc_building_button() -> impl Bundle {
-    (
-        Node {
-            border: UiRect::all(px(2)),
-            padding: UiRect::all(px(5)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BuildResourceBuildingButton,
-        Button,
-        Hovered::default(),
-        TabIndex(0),
-        BorderColor::all(Color::WHITE),
-        BorderRadius::all(px(15)),
-        BackgroundColor(BUTTON_COLOR),
-        children![(
-            Text::new("Build Farm"),
-            TextFont {
-                font_size: 22.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-        )],
-    )
-}
-
 fn province_detail_panel() -> impl Bundle {
-    let production = String::from("Production:\nGrain: +5");
-    let upkeep = String::from("Upkeep:\nGrain: -2");
-
     let resources = (
         Node {
             /* Children */
@@ -263,38 +251,11 @@ fn province_detail_panel() -> impl Bundle {
             ..Default::default()
         },
         children![
-            (
-                UIProductionText,
-                Text::new(production),
-                TextFont { 
-                   font_size: 18.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            ),
-            (
-                UIUpkeepText,
-                Text::new(upkeep),
-                TextFont { 
-                   font_size: 18.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            ),
+            text::<UIProductionText>(18.0),
+            text::<UIUpkeepText>(18.0),
         ]
     );
-    let houses = (
-        UIHousesText,
-        Text::new("Houses: 3/3"),
-        TextFont { 
-            font_size: 18.0,
-            ..Default::default()
-        },
-        TextColor(Color::WHITE),
-        TextLayout::new_with_justify(Justify::Left),
-    );
+    let houses = text::<UIHousesText>(18.0);
 
     let buttons = (
         Node {
@@ -305,8 +266,8 @@ fn province_detail_panel() -> impl Bundle {
             ..Default::default()
         },
         children![
-            build_house_button(),
-            build_resc_building_button()
+            button::<BuildHouseButton>(Display::Flex),
+            button::<BuildResourceBuildingButton>(Display::Flex)
         ]
     );
 
@@ -318,16 +279,7 @@ fn province_detail_panel() -> impl Bundle {
             ..Default::default()
         },
         children![
-            (
-                UIResidentsText,
-                Text::new("Assign residents:\n- 4/5 +"),
-                TextFont { 
-                   font_size: 18.0,
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-                TextLayout::new_with_justify(Justify::Left),
-            ),
+            text::<UIResidentsText>(18.0)
         ]
     );
 
@@ -345,73 +297,18 @@ fn province_detail_panel() -> impl Bundle {
     container
 }
 
-fn claim_province_button() -> impl Bundle {
-    (
-        Node {
-            border: UiRect::all(px(2)),
-            padding: UiRect::all(px(5)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        ClaimProvinceButton,
-        Button,
-        Hovered::default(),
-        TabIndex(0),
-        BorderColor::all(Color::WHITE),
-        BorderRadius::all(px(15)),
-        BackgroundColor(BUTTON_COLOR),
-        children![(
-            Text::new("Claim Province"),
-            TextFont {
-                font_size: 22.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-        )],
-    )
-}
-
 fn province_claim_panel() -> impl Bundle {
     let container = (
         UIClaimProvincePanel,
-        claim_province_button()
+        button::<ClaimProvinceButton>(Display::None)
     );
 
     container
 }
 
-fn build_castle_button() -> impl Bundle {
-    (
-        Node {
-            display: Display::None,
-            border: UiRect::all(px(2)),
-            padding: UiRect::all(px(5)),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        BuildCastleButton,
-        Button,
-        Hovered::default(),
-        TabIndex(0),
-        BorderColor::all(Color::WHITE),
-        BorderRadius::all(px(15)),
-        BackgroundColor(BUTTON_COLOR),
-        children![(
-            Text::new("Build Castle"),
-            TextFont {
-                font_size: 22.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-        )],
-    )
-}
-
 fn recruit_panel() -> impl Bundle {
     let units = (
-        UISoldiersText,
+        RecruitedSoldiersText,
         Text::new("Soldiers 0/15"),
         TextFont { 
             font_size: 18.0,
@@ -465,8 +362,7 @@ pub fn spawn_province_panel_group(
     let hover = province_hover_panel(&empire_assets);
     let detail = province_detail_panel();
     let claim = province_claim_panel();
-    let castle_button = build_castle_button();
-    let units = recruit_panel();
+    let recruit = recruit_panel();
 
     let container = (
         UIProvincePanel,
@@ -488,8 +384,8 @@ pub fn spawn_province_panel_group(
             hover,
             detail,
             claim,
-            castle_button,
-            units
+            button::<BuildCastleButton>(Display::None),
+            recruit
         ]
     );
 
@@ -674,28 +570,55 @@ pub fn spawn_treasury_panel(
     commands.spawn(main_panel);
 }
 
+fn armies_panel() -> impl Bundle {
+    let buttons = (
+        Node {
+            align_items: AlignItems::Start,
+            flex_direction: FlexDirection::Row,
+            column_gap: px(5),
+            ..Default::default()
+        },
+        children![
+            button::<CreateArmyButton>(Display::Flex),
+            button::<DisbandArmyButton>(Display::Flex)
+        ]
+    );
+
+    let panel = (
+        ArmiesPanel::default(),
+        rounded_container(FlexDirection::Column, px(5)),
+        children![
+            text::<UnassignedSoldiersText>(18.0),
+            text::<ArmyTextPre>(ARMY_DEF_FONTSIZE),
+            text::<ArmyTextSelected>(ARMY_DEF_FONTSIZE),
+            text::<ArmyTextPost>(ARMY_DEF_FONTSIZE),
+            buttons
+        ]
+    );
+
+    panel
+}
 
 pub fn spawn_units_panel_group(
     mut commands: Commands
 ) {
     let container = (
-        UnitsPanel,
         Node {
-            display: Display::None,
+            display: Display::Flex,
             width: auto(),
             height: auto(),
             position_type: PositionType::Absolute,
             left: px(0),
-            top: px(50),
+            top: px(100),
             /* Children */
-            align_items: AlignItems::End,
+            align_items: AlignItems::Start,
             flex_direction: FlexDirection::Column,
             row_gap: px(10),
-            padding: UiRect::new(px(0), TPL_PADDING, TPL_PADDING, TPL_PADDING),
+            padding: UiRect::new(TPL_PADDING, px(0), TPL_PADDING, TPL_PADDING),
             ..Default::default()
         },
         children![
-
+            armies_panel()
         ]
     );
 

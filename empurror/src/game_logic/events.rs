@@ -14,6 +14,8 @@ impl Plugin for GameEventPlugin {
             .add_observer(calculate_province_income)
             .add_observer(calculate_empire_resource_net_income)
             .add_observer(calculate_empire_pops_income)
-            .add_observer(recruit_soldier);
+            .add_observer(recruit_soldier)
+            .add_observer(create_army)
+            .add_observer(disband_army);
     }
 }

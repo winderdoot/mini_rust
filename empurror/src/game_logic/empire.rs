@@ -26,6 +26,9 @@ pub struct Empire {
     pub color: Color,
     pub name: String,
 
+    /* Armies */
+    pub armies_created: u32, /* Counts how many armies were ever created */
+
     /* Treasury */
     pub resource_total: HashMap<ResourceType, f32>,
     pub resource_income: HashMap<ResourceType, f32>,
@@ -59,8 +62,23 @@ impl Empire {
             pops_total: 2,
             pops_free: 2,
             pops_income: 0,
-            soldiers: 0
+            soldiers: 0,
+            armies_created: 0
         }
+    }
+
+    pub fn total_armies_created(&self) -> u32 {
+        self.armies_created
+    }
+
+    pub fn new_army_id(&mut self) -> u32 {
+        let ret = self.armies_created;
+        self.armies_created += 1;
+        ret
+    }
+
+    pub fn new_army(&mut self) {
+        self.armies_created += 1;
     }
 
     pub fn get_soldiers(&self) -> u32 {
@@ -201,7 +219,8 @@ pub fn recruit_soldier(
     empire_c.remove_resources(&event.soldier.recruit_cost());
     empire_c.try_remove_free_pop();
     empire_c.add_soldier();
-    province_c.try_add_pop();
+    province_c.try_add_pop(); /* Pop in this province is used to calculate the province upkeep for the soldier */
+    province_c.add_soldier(Soldier::new_infantry(&event.province));
 
     commands.trigger(ProvinceIncomeChanged { province: event.province });
     commands.trigger(ResourceIncomeChanged { empire: event.empire });

@@ -1,6 +1,9 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, input::keyboard::Key, platform::collections::HashMap, prelude::*, ui::*};
 
-use crate::{game_logic::{armies::SoldierType, empire::*, province::*, resources::*, turns::Turns}, scene::{assets::*, hex_grid::*}, ui::panels::*};
+use strum::IntoEnumIterator;
+use std::cmp::*;
+
+use crate::{game_logic::{armies::{Army, ProvinceArmies, SoldierType}, empire::*, province::*, resources::*, turns::Turns}, scene::{assets::*, hex_grid::*}, ui::panels::*};
 
 pub fn resource_str(map: &HashMap<ResourceType, f32>) -> String {
     map
@@ -408,7 +411,7 @@ pub fn update_recruit_panel(
         Single<&mut Node, With<RecruitSoldierButton>>,
     )>,
     mut text: ParamSet<(
-        Single<&mut Text, With<UISoldiersText>>,
+        Single<&mut Text, With<RecruitedSoldiersText>>,
     )>,
     mut buttons: ParamSet<(
         Single<Entity, With<RecruitSoldierButton>>,
@@ -469,7 +472,7 @@ pub fn update_recruit_panel(
     let recruit_button_ent = *buttons.p0();
 
     let recruit_cost = SoldierType::Infantry.recruit_cost();
-    if empire_c.can_afford(&recruit_cost) && empire_c.has_free_pops() {
+    if empire_c.can_afford(&recruit_cost) && empire_c.has_free_pops() && province_c.has_pops_room() {
         commands
             .entity(recruit_button_ent)
             .remove::<InteractionDisabled>();
@@ -532,8 +535,185 @@ pub fn update_treasury_panel(
         });
 }
 
-pub fn update_units_panel(
-
+pub fn update_armies_panel(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    picked: Res<PickedProvince>,
+    mut q_provinces: Query<(&mut Province, &ControlledBy, Option<&mut ProvinceArmies>)>,
+    mut q_armies: Query<&mut Army>,
+    q_empires: Query<&Empire>,
+    mut nodes: ParamSet<(
+        Single<(&mut Node, &mut ArmiesPanel)>,
+    )>,
+    mut text: ParamSet<(
+        Single<&mut Text, With<UnassignedSoldiersText>>,
+        Single<&mut Text, With<ArmyTextPre>>,
+        Single<(&mut Text, &mut TextFont, &mut TextColor), With<ArmyTextSelected>>,
+        Single<&mut Text, With<ArmyTextPost>>,
+    )>,
+    mut buttons: ParamSet<(
+        Single<Entity, With<CreateArmyButton>>,
+        Single<Entity, With<DisbandArmyButton>>,
+    )>,
+    mut commands: Commands,
+    turns: Res<Turns>
 ) {
+    let (tpl_node, _) = &mut *nodes.p0();
+    tpl_node.display = Display::None;
+
+    let PickedProvince::Selected(province) = *picked else {
+        return;
+    };
+    let Ok((province_c, controlled_by, armies_c)) = q_provinces.get_mut(province) else {
+        return;
+    };
+    let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
+        error!("{}:{} Empire component missing", file!(), line!());
+        return;
+    };
+    if empire_c.id != PLAYER_EMPIRE {
+        return;
+    }
+
+    let armies_count =
+    if let Some(armies_c) = &armies_c {
+        armies_c.count()
+    }
+    else {
+        0
+    };
+    if province_c.soldier_count() == 0 && armies_count == 0 {
+        return;
+    }
+
+    /* Display the panel */
+    tpl_node.display = Display::Flex;
+
+    /* Update the text for stationed soldiers */
+    let avail_soldiers_text = &mut *text.p0();
+    let soldier_count = province_c
+            .soldiers_iter()
+            .fold(HashMap::<SoldierType, u32>::new(), |mut map, soldier| {
+                map
+                    .entry(soldier.stype)
+                    .and_modify(|count| *count += 1)
+                    .or_insert(1);
+
+                map
+            });
+    
+    avail_soldiers_text.0 = format!("Unassigned units:\n{}", 
+        SoldierType::iter()
+            .map(|typ| {
+                format!("{}: {}\n", typ, *soldier_count.get(&typ).unwrap_or(&0))
+            })
+            .collect::<Vec<String>>()
+            .join("")
+    );
+
+    /* Manage the armies list */
+    let (_, army_panel) = &mut *nodes.p0();
+    army_panel.armies = armies_count as u32;
+    
+    if keyboard.just_released(KeyCode::KeyK) {
+        army_panel.curr_army = max(army_panel.curr_army, 1) - 1;
+    }
+    if keyboard.just_released(KeyCode::KeyJ) && (armies_count > 0) {
+        army_panel.curr_army = min(army_panel.curr_army + 1, army_panel.armies - 1);
+    }
+
+    if armies_count == 0 {
+        let pre_text = &mut *text.p1();
+        pre_text.0 = String::from("(No armies stationed here)");
+
+        let (sel_text, _, _) = &mut *text.p2();
+        sel_text.0 = String::new();
+
+        let post_text = &mut *text.p3();
+        post_text.0 = String::new();
+    }
+    else {
+        let Some(prov_armies) = armies_c else {
+            error!("{}:{} Should be impossible", file!(), line!());
+            return;
+        };
+
+        /* Pre text */
+        let pre_text = &mut *text.p1();
+        pre_text.0 = String::from("Stationed armies: (K - up, J - down)\n");
+
+        prov_armies
+            .iter()
+            .take(army_panel.curr_army as usize)
+            .for_each(|army_ent| {
+                let Ok(army_c) = q_armies.get(army_ent) else {
+                    error!("{}:{} Missing army component", file!(), line!());
+                    return;
+                };
+
+                let moved_text = if army_c.moved { " (moved)" } else { "" };
+                pre_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
+            });
+
+        /* Selected text */
+        let sel_army_ent = prov_armies.armies()[army_panel.curr_army as usize];
+        let Ok(sel_army_c) = q_armies.get(sel_army_ent) else {
+            error!("{}:{} Missing army component", file!(), line!());
+            return;
+        };
+        let moved_text = if sel_army_c.moved { " (moved)" } else { "" };
+        let (sel_text, text_font, text_color) = &mut *text.p2();
+        sel_text.0 = format!("> {}: {} units{} < (+/- to add/remove units)", sel_army_c, sel_army_c.soldier_count(), moved_text);
+        /* These parameters could be the same from the beginning and stay unmodified */
+        text_font.font_size = ARMY_SEL_FONTSIZE;
+        text_color.0 = ARMY_SEL_COLOR;
+
+        /* Post text */
+        let post_text = &mut *text.p3();
+        post_text.0 = String::new();
+
+        prov_armies
+            .iter()
+            .skip((army_panel.curr_army + 1) as usize)
+            .take((army_panel.armies - army_panel.curr_army - 1) as usize)
+            .for_each(|army_ent| {
+                let Ok(army_c) = q_armies.get(army_ent) else {
+                    error!("{}:{} Missing army component", file!(), line!());
+                    return;
+                };
+
+                let moved_text = if army_c.moved { " (moved)" } else { "" };
+                post_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
+            });
+
+    }
+
+    /* Todo: display the army list and mark the selected army */
+    /* Make an ArmyCreated/ArmyDisbanded event? in province probably, add an empire field to army */
+
+    /* Handle the buttons */
+    let disband_but_ent = &mut *buttons.p1();
+    if armies_count == 0 {
+        commands
+            .entity(*disband_but_ent)
+            .insert(InteractionDisabled);
+    }
+    else {
+        commands
+            .entity(*disband_but_ent)
+            .remove::<InteractionDisabled>();
+    }
+
+    let create_but_ent = &mut *buttons.p0();
+    if province_c.soldier_count() == 0 {
+        commands
+            .entity(*create_but_ent)
+            .insert(InteractionDisabled);
+    }
+    else {
+        commands
+            .entity(*create_but_ent)
+            .remove::<InteractionDisabled>();
+    }
+
 
 }

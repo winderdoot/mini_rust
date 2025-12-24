@@ -1,6 +1,7 @@
 use bevy::{picking::hover::Hovered, prelude::*, ui::*};
 
-use crate::{game_logic::{armies::SoldierType, empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
+use std::cmp::{max};
+use crate::{game_logic::{armies::{ProvinceArmies, SoldierType}, empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
 
 fn set_button_style(
     mess: &str,
@@ -353,5 +354,92 @@ pub fn update_end_turn_button(
 
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(EndTurn { empire_id: empire_c.id });
+    }
+}
+
+pub fn update_create_army_button(
+    mut button: Single<
+        (
+            Option<&Pressed>,
+            &Hovered,
+            Option<&InteractionDisabled>,
+            &mut BackgroundColor,
+            &Children,
+        ),
+        With<CreateArmyButton>
+    >,
+    button_ent: Single<Entity, With<CreateArmyButton>>,
+    mut text_query: Query<&mut Text>,
+    empires: Res<Empires>,
+    pick: Res<PickedProvince>,
+    mut commands: Commands,
+) {
+    let (pressed, hovered, disabled, color, children) = &mut *button;
+    let Ok(mut text) = text_query.get_mut(children[0]) else {
+        return;
+    };
+
+    let button_text = String::from("Create new army");
+    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
+
+    if pressed.is_some() && !disabled.is_some() {
+        let Some(player_empire) = empires.player_empire() else {
+            error!("Missing player empire");
+            return;
+        };
+        let PickedProvince::Selected(province_e) = *pick else {
+            error!("{}:{} Missing province entity", file!(), line!());
+            return;
+        };
+
+        commands.entity(*button_ent).remove::<Pressed>();
+        commands.trigger(ArmyCreated { empire: *player_empire, province: province_e })
+    }
+}
+
+pub fn update_disband_army_button(
+    mut button: Single<
+        (
+            Option<&Pressed>,
+            &Hovered,
+            Option<&InteractionDisabled>,
+            &mut BackgroundColor,
+            &Children,
+        ),
+        With<DisbandArmyButton>
+    >,
+    button_ent: Single<Entity, With<DisbandArmyButton>>,
+    mut text_query: Query<&mut Text>,
+    mut army_panel: Single<&mut ArmiesPanel>,
+    pick: Res<PickedProvince>,
+    q_provinces: Query<&ProvinceArmies, With<Province>>,
+    mut commands: Commands,
+) {
+    let (pressed, hovered, disabled, color, children) = &mut *button;
+    let Ok(mut text) = text_query.get_mut(children[0]) else {
+        return;
+    };
+
+    let button_text = String::from("Disband army");
+    set_button_style(&button_text, &button_text, disabled.is_some(), hovered.get(), pressed.is_some(), color, &mut text);
+
+    if pressed.is_some() && !disabled.is_some() {
+        let PickedProvince::Selected(province_e) = *pick else {
+            error!("{}:{} Missing province entity", file!(), line!());
+            return;
+        };
+        let Ok(armies_c) = q_provinces.get(province_e) else {
+            error!("{}:{} Missing province armies vector", file!(), line!());
+            return;
+        };
+        let Some(army_ent) = armies_c.armies().get(army_panel.curr_army as usize) else {
+            error!("{}:{} Invalid current army index", file!(), line!());
+            return;
+        };
+
+        army_panel.curr_army = max(1, army_panel.curr_army) - 1;
+
+        commands.entity(*button_ent).remove::<Pressed>();
+        commands.trigger(ArmyDisbanded { army: *army_ent });
     }
 }
