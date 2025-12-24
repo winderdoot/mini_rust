@@ -84,6 +84,7 @@ impl ProvinceType {
 pub struct Province {
     pub ptype: ProvinceType,
     special_building: bool,
+    castle: bool,
     house_count: u32,
     pops: u32,
     max_pops: u32,
@@ -96,6 +97,7 @@ impl Province {
         Self {
             ptype: t.clone(),
             special_building: false,
+            castle: false,
             house_count: 0,
             pops: 0,
             max_pops: 0,
@@ -189,7 +191,7 @@ impl Province {
     }
 
     fn upkeep(&self) -> HashMap<ResourceType, f32> {
-        let pop_cost = match self.ptype {
+        let mut pop_cost = match self.ptype {
             ProvinceType::Water => {
                 error!("Water province can't be owned");
                 return HashMap::new();
@@ -201,9 +203,17 @@ impl Province {
             ProvinceType::Hills => 2.25,
             ProvinceType::Mountains => 3.5,
         };
+        if self.castle {
+            pop_cost *= 2.5;
+        }
+        let gold_cost = if self.castle {
+            5.0
+        } else {
+            0.0
+        };
         let food_cost = pop_cost * (self.pops as f32);
 
-        return HashMap::from([(ResourceType::Grain, food_cost)]);
+        return HashMap::from([(ResourceType::Grain, food_cost), (ResourceType::Gold, gold_cost)]);
     }
 
     fn base_income(&self) -> HashMap<ResourceType, f32> {
@@ -273,6 +283,11 @@ pub enum SpecialBuilding {
 
 impl SpecialBuilding {
     pub fn income(&self, ptype: &ProvinceType, workers: u32) -> HashMap<ResourceType, f32> {
+        match self {
+            SpecialBuilding::Castle => return Default::default(),
+            _ => {}
+        }
+
         match ptype {
             ProvinceType::BlackSoil => {
                 return [(ResourceType::Grain, workers as f32 * 6.0)].into();
@@ -299,7 +314,7 @@ impl SpecialBuilding {
             SpecialBuilding::LumberMill => [(ResourceType::Lumber, 15.0)].into(),
             SpecialBuilding::StoneMine => [(ResourceType::Lumber, 20.0)].into(),
             SpecialBuilding::GoldMine => [(ResourceType::Lumber, 25.0), (ResourceType::Stone, 6.0)].into(),
-            SpecialBuilding::Castle => panic!("I dunno yet lmao"),
+            SpecialBuilding::Castle => [(ResourceType::Lumber, 30.0), (ResourceType::Stone, 40.0)].into(),
         }
     }
 }
@@ -314,6 +329,7 @@ pub struct HouseAdded {
 #[derive(Event, Debug)]
 pub struct SpecialBuildingAdded {
     pub province: Entity,
+    pub castle: bool
 }
 /// Used to recalculate province upkeep/production/population
 #[derive(Event, Debug)]
@@ -401,7 +417,7 @@ pub fn add_house(
 }
 
 
-pub fn add_resource_building(
+pub fn add_special_building(
     event: On<SpecialBuildingAdded>,
     models: Res<Models>,
     mut q_provinces: Query<(&Transform, &mut Province)>,
@@ -416,22 +432,26 @@ pub fn add_resource_building(
         return;
     }
     prov.special_building = true;
+    prov.castle = event.castle;
 
     let transl = Vec3::new(0.0, 0.5, 0.0);
     let desired = Transform::from_translation(transl);
     let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
     
-    let (model, building_type) = match prov.ptype {
-        ProvinceType::BlackSoil | ProvinceType::Plains => {
+    let (model, building_type) = match (prov.ptype.clone(), event.castle) {
+        (_, true) => {
+            (models.castle.clone(), SpecialBuilding::Castle)
+        }
+        (ProvinceType::BlackSoil | ProvinceType::Plains, false) => {
             (models.farm.clone(), SpecialBuilding::Farm)
         },
-        ProvinceType::Woods => {
+        (ProvinceType::Woods, false) => {
             (models.farm.clone(), SpecialBuilding::LumberMill)
         },
-        ProvinceType::Hills => {
+        (ProvinceType::Hills, false) => {
             (models.farm.clone(), SpecialBuilding::StoneMine)
         },
-        ProvinceType::Mountains => {
+        (ProvinceType::Mountains, false) => {
             (models.farm.clone(), SpecialBuilding::GoldMine)
         },
         _ => {

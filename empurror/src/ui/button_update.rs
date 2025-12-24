@@ -195,7 +195,7 @@ pub fn update_build_resource_building_button(
         empire_c.remove_resources(&build_cost);
 
         commands.entity(*button_ent).remove::<Pressed>();
-        commands.trigger(SpecialBuildingAdded { province }); /* Causes the province to calculate it's income too */
+        commands.trigger(SpecialBuildingAdded { province, castle: false }); /* Causes the province to calculate it's income too */
         commands.trigger(ResourceIncomeChanged { empire: *player_empire });
     }
 }

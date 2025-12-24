@@ -9,7 +9,7 @@ impl Plugin for GameEventPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_observer(add_house)
-            .add_observer(add_resource_building)
+            .add_observer(add_special_building)
             .add_observer(claim_province)
             .add_observer(calculate_province_income)
             .add_observer(calculate_empire_resource_net_income)

@@ -214,6 +214,8 @@ pub fn calculate_empire_resource_net_income(
                 })
                 .collect()
         });
+
+    /* Consider making homeless pops eat too, and then raise the food consumption for working pops */
 }
 
 pub fn calculate_empire_pops_income(
