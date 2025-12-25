@@ -611,6 +611,7 @@ pub fn update_armies_panel(
     );
 
     /* Manage the armies list */
+    let mut army_moved = false; /* Hacky dependency */
     let (_, army_panel) = &mut *nodes.p0();
     army_panel.armies = armies_count as u32;
     
@@ -660,6 +661,11 @@ pub fn update_armies_panel(
             error!("{}:{} Missing army component", file!(), line!());
             return;
         };
+
+        /* Needed by some other part of this function */
+        army_moved = sel_army_c.moved();
+        /* Carry on... */
+        
         let moved_text = if sel_army_c.moved() { " (moved)" } else { "" };
         let (sel_text, text_font, text_color) = &mut *text.p2();
         sel_text.0 = format!("{}: {} units{} (H/L to remove/add units)", *sel_army_c, sel_army_c.soldier_count(), moved_text);
@@ -702,7 +708,7 @@ pub fn update_armies_panel(
 
     /* Handle the buttons */
     let disband_but_ent = &mut *buttons.p1();
-    if armies_count == 0 {
+    if armies_count == 0 || army_moved {
         commands
             .entity(*disband_but_ent)
             .insert(InteractionDisabled);

@@ -10,6 +10,7 @@ pub struct Models {
     pub stone_mine: Handle<Scene>,
     pub gold_mine: Handle<Scene>,
     pub castle: Handle<Scene>,
+    pub knight: Handle<Scene>
 }
 
 #[derive(Resource, Default)]
@@ -38,7 +39,7 @@ fn load_empire_flags(
     assets.flags.push(server.load("flags/flag5.png"));
 }
 
-fn load_building_assets(
+fn load_model_assets(
     server: Res<AssetServer>, 
     mut models: ResMut<Models>    
 ) {
@@ -48,6 +49,7 @@ fn load_building_assets(
     models.stone_mine = server.load(GltfAssetLabel::Scene(0).from_asset("kenney_hexagon-kit/Models/GLB format/unit-house.glb"));
     models.gold_mine = server.load(GltfAssetLabel::Scene(0).from_asset("kenney_hexagon-kit/Models/GLB format/unit-house.glb"));
     models.castle = server.load(GltfAssetLabel::Scene(0).from_asset("kenney_hexagon-kit/Models/GLB format/unit-wall-tower.glb"));
+    models.knight = server.load(GltfAssetLabel::Scene(0).from_asset("models/cat-knight.glb"))
 }
 
 fn load_icons(
@@ -72,7 +74,7 @@ impl Plugin for GameModelsPlugin {
             .init_resource::<Icons>()
             .add_systems(Startup, 
                 (
-                    load_building_assets,
+                    load_model_assets,
                     load_empire_flags,
                     load_icons
                 ).in_set(StartupSystems::LoadAssets)

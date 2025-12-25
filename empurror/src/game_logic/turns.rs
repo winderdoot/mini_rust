@@ -100,6 +100,7 @@ fn turn_started(
     info!("Empire {} starts it's turn", event.empire_id);
     turns.current_empire = event.empire_id;
 
+    commands.trigger(ResetEmpireArmies { empire: *empire_ent });
     commands.trigger(ResourceIncomeChanged { empire: *empire_ent });
     commands.trigger(PopsIncomeChanged { empire: *empire_ent });
     

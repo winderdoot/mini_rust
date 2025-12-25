@@ -4,7 +4,7 @@ use hexx::Hex;
 use std::{cmp::{Eq, min}, f32::consts::PI};
 use strum_macros::{Display, EnumIter};
 
-use crate::game_logic::{armies::{Army, ArmyProvince, Soldier, SoldierType}, empire::{Controls, Empire}, resources::ResourceType};
+use crate::game_logic::{armies::*, empire::{Controls, Empire}, resources::ResourceType};
 use crate::scene::assets::Models;   
 use crate::scene::{hex_grid};
 
@@ -73,6 +73,7 @@ pub struct Province {
     upkeep: HashMap<ResourceType, f32>,
     income: HashMap<ResourceType, f32>,
     soldiers: Vec<Soldier>, /* Free soldiers unassigned to armies */
+    army_model: Option<Entity>
 }
 
 impl Province {
@@ -87,8 +88,17 @@ impl Province {
             max_pops: 0,
             upkeep: Default::default(),
             income: Default::default(),
-            soldiers: Default::default()
+            soldiers: Default::default(),
+            army_model: None
         }
+    }
+
+    pub fn get_army_model(&self) -> Option<Entity> {
+        self.army_model
+    }
+
+    pub fn set_army_model(&mut self, to: Option<Entity>) {
+        self.army_model = to;
     }
 
     pub fn hex(&self) -> Hex {
@@ -283,10 +293,10 @@ impl Province {
             ProvinceType::Water => None,
             ProvinceType::BlackSoil => Some(2),
             ProvinceType::Plains => Some(2),
-            ProvinceType::Woods => Some(2),
-            ProvinceType::Desert => Some(4),
-            ProvinceType::Hills => Some(3),
-            ProvinceType::Mountains => Some(5),
+            ProvinceType::Woods => Some(3),
+            ProvinceType::Desert => Some(5),
+            ProvinceType::Hills => Some(4),
+            ProvinceType::Mountains => Some(6),
         }
     }
 }
@@ -401,7 +411,57 @@ pub struct ArmyDisbanded {
     pub army: Entity
 }
 
+// Used to update army models displayed on the province tile
+#[derive(Event, Debug)]
+pub struct ProvinceArmyChanged {
+    pub province: Entity
+}
+
 /* Systems */
+pub fn update_army_model(
+    event: On<ProvinceArmyChanged>,
+    models: Res<Models>,
+    mut q_provinces: Query<(&Transform, &mut Province, Option<&ProvinceArmies>)>,
+    mut commands: Commands
+) {
+    let Ok((province_t, mut province_c, armies_c_o)) = q_provinces.get_mut(event.province) else {
+        error!("{}:{} Missing province component", file!(), line!());
+        return;
+    };
+    let army_count = armies_c_o.map_or(0, |armies_c| armies_c.count());
+    match (province_c.get_army_model(), army_count) {
+        (None, 0) => {
+            warn!("{}:{} update_army_model has no effect", file!(), line!());
+            return;
+        },
+        (None, 1..) => {
+            let transl = Vec3::new(0.4, 0.8, 0.3);
+            let desired = Transform::from_translation(transl);
+            let transform = hex_grid::hextile_rel_transform(&province_t, &desired)
+                .with_scale(Vec3::splat(0.35));
+
+            province_c.set_army_model(Some(
+                commands.spawn((
+                    ArmyModel, /* Marker component - not used for now */
+                    transform,
+
+                    SceneRoot(models.knight.clone())
+                )).id())
+            );
+        },
+        (Some(model_e), 0) => {
+            province_c.set_army_model(None);
+            commands
+                .entity(model_e)
+                .despawn();
+        },
+        (Some(_), 1..) => {
+            /* We don't have to do anything */ 
+            info!(" both model and army are present");
+        }
+    }
+}
+
 pub fn create_army(
     event: On<ArmyCreated>,
     mut q_provinces: Query<&mut Province>,
@@ -427,6 +487,8 @@ pub fn create_army(
             army,
             ArmyProvince(event.province)
         ));
+
+    commands.trigger(ProvinceArmyChanged { province: event.province });
 }
 
 pub fn disband_army(
@@ -453,6 +515,8 @@ pub fn disband_army(
     commands
         .entity(event.army)
         .despawn();
+
+    commands.trigger(ProvinceArmyChanged { province: province_e.entity() });
 }
 
 // Recalculate all province income/upkeep values

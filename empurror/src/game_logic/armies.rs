@@ -41,10 +41,10 @@ impl Soldier {
 
 #[derive(Component, Debug)]
 pub struct Army {
-    pub atype: SoldierType,
-    pub soldiers: Vec<Soldier>,
-    pub empire: Entity,
-    pub id: u32,
+    atype: SoldierType,
+    soldiers: Vec<Soldier>,
+    empire: Entity,
+    id: u32,
     moved: bool /* If moved this turn */
 }
 
@@ -57,6 +57,10 @@ impl Army {
             id,
             moved: false
         }
+    }
+
+    pub fn empire(&self) -> Entity {
+        self.empire.clone()
     }
 
     pub fn march_budget(&self) -> u32 {
@@ -119,6 +123,10 @@ impl std::fmt::Display for Army {
     }
 }
 
+#[derive(Component)]
+// #[require(M)]
+pub struct ArmyModel;
+
 /* Relationships */
 
 /* Source of truth in ArmyProvince <-> ProvinceArmies */
@@ -155,19 +163,21 @@ pub struct ArmyMoved {
 
 pub fn move_army(
     event: On<ArmyMoved>,
-    mut q_armies: Query<&mut Army>,
+    mut q_armies: Query<(&mut Army, &ArmyProvince)>,
     mut commands: Commands
 ) {
     commands
         .entity(event.army)
-        .remove::<ArmyProvince>()
         .insert(ArmyProvince(event.province));
 
-    let Ok(mut army_c) = q_armies.get_mut(event.army) else {
+    let Ok((mut army_c, starting_province)) = q_armies.get_mut(event.army) else {
         error!("{}:{} Missing army component", file!(), line!());
         return;
     };
     army_c.set_moved();
+
+    commands.trigger(ProvinceArmyChanged { province: starting_province.entity() }); /* Source */
+    commands.trigger(ProvinceArmyChanged { province: event.province }); /* Destination */
 }
 
 pub fn get_reachable_tiles(

@@ -198,8 +198,24 @@ pub struct SoldierRecruited {
     pub empire: Entity,
     pub province: Entity
 }
+#[derive(Event, Debug)]
+pub struct ResetEmpireArmies {
+    pub empire: Entity
+}
 
 /* Systems */
+pub fn reset_armies_moves(
+    event: On<ResetEmpireArmies>,
+    mut q_armies: Query<&mut Army>
+) {
+    q_armies
+        .iter_mut()
+        .filter(|army_c| army_c.empire() == event.empire)
+        .for_each(|mut army_c| {
+            army_c.reset_moved();
+        })
+}
+
 pub fn recruit_soldier(
     event: On<SoldierRecruited>,
     mut q_provinces: Query<&mut Province>,
