@@ -4,7 +4,7 @@ use strum_macros::{Display, EnumIter};
 
 use crate::game_logic::resources::*;
 
-#[derive(Copy, Clone, Debug, Display, PartialEq, Eq, Hash, EnumIter)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum SoldierType {
     Infantry
 }
@@ -39,7 +39,7 @@ pub struct Army {
     pub soldiers: Vec<Soldier>,
     pub empire: Entity,
     pub id: u32,
-    pub moved: bool /* If moved this turn */
+    pub locked: bool /* If moved this turn */
 }
 
 impl Army {
@@ -49,8 +49,25 @@ impl Army {
             soldiers: vec![soldier],
             empire,
             id,
-            moved: false
+            locked: false
         }
+    }
+
+    pub fn soldier_type(&self) -> SoldierType {
+        self.atype.clone()
+    }
+
+    pub fn try_add_soldier(&mut self, soldier: Soldier) -> bool {
+        if soldier.stype != self.atype {
+            return false;
+        }
+        self.soldiers.push(soldier);
+
+        true
+    }
+
+    pub fn try_remove_soldier(&mut self) -> Option<Soldier> {
+        self.soldiers.pop()
     }
 
     pub fn id(&self) -> u32 {
@@ -68,11 +85,19 @@ impl Army {
     pub fn soldier_count(&self) -> usize {
         self.soldiers.len()
     }
+
+    pub fn moved(&self) -> bool {
+        self.locked
+    }
+
+    pub fn reset_moved(&mut self) {
+        self.locked = false;
+    }
 }
 
 impl std::fmt::Display for Army {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Army {}", self.id)
+        write!(f, "Army {} ({})", self.id, self.atype)
     }
 }
 

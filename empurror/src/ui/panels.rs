@@ -21,7 +21,7 @@ pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
 pub const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
 pub const BUTTON_COLOR_DISABLED: Color = Color::linear_rgba(0.05, 0.05, 0.05, 1.0);
 pub const ARMY_DEF_FONTSIZE: f32 = 18.0;
-pub const ARMY_SEL_FONTSIZE: f32 = 20.0;
+pub const ARMY_SEL_FONTSIZE: f32 = 19.0;
 pub const ARMY_SEL_COLOR: Color = Color::linear_rgba(0.8, 0.8, 0.8, 1.0);
 
 /* Reource/Component definitions */

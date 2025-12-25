@@ -563,7 +563,7 @@ pub fn update_armies_panel(
     let PickedProvince::Selected(province) = *picked else {
         return;
     };
-    let Ok((province_c, controlled_by, armies_c)) = q_provinces.get_mut(province) else {
+    let Ok((mut province_c, controlled_by, armies_c)) = q_provinces.get_mut(province) else {
         return;
     };
     let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
@@ -650,22 +650,35 @@ pub fn update_armies_panel(
                     return;
                 };
 
-                let moved_text = if army_c.moved { " (moved)" } else { "" };
+                let moved_text = if army_c.locked { " (moved)" } else { "" };
                 pre_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
             });
 
         /* Selected text */
         let sel_army_ent = prov_armies.armies()[army_panel.curr_army as usize];
-        let Ok(sel_army_c) = q_armies.get(sel_army_ent) else {
+        let Ok(mut sel_army_c) = q_armies.get_mut(sel_army_ent) else {
             error!("{}:{} Missing army component", file!(), line!());
             return;
         };
-        let moved_text = if sel_army_c.moved { " (moved)" } else { "" };
+        let moved_text = if sel_army_c.locked { " (moved)" } else { "" };
         let (sel_text, text_font, text_color) = &mut *text.p2();
-        sel_text.0 = format!("> {}: {} units{} < (+/- to add/remove units)", sel_army_c, sel_army_c.soldier_count(), moved_text);
+        sel_text.0 = format!("{}: {} units{} (H/L to remove/add units)", *sel_army_c, sel_army_c.soldier_count(), moved_text);
         /* These parameters could be the same from the beginning and stay unmodified */
         text_font.font_size = ARMY_SEL_FONTSIZE;
         text_color.0 = ARMY_SEL_COLOR;
+
+        /* Modify the army if it's not locked/moved */
+        if !sel_army_c.moved() && sel_army_c.soldier_count() > 1 && keyboard.just_released(KeyCode::KeyH) {
+            if let Some(soldier) = sel_army_c.try_remove_soldier() {
+                province_c.add_soldier(soldier);
+            }
+        }
+        else if !sel_army_c.moved() && keyboard.just_released(KeyCode::KeyL) {
+            let soldier_opt = province_c.try_remove_soldier_type(&sel_army_c.soldier_type());
+            if let Some(soldier) = soldier_opt {
+                sel_army_c.try_add_soldier(soldier);
+            }
+        }
 
         /* Post text */
         let post_text = &mut *text.p3();
@@ -681,7 +694,7 @@ pub fn update_armies_panel(
                     return;
                 };
 
-                let moved_text = if army_c.moved { " (moved)" } else { "" };
+                let moved_text = if army_c.locked { " (moved)" } else { "" };
                 post_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
             });
 
@@ -714,6 +727,4 @@ pub fn update_armies_panel(
             .entity(*create_but_ent)
             .remove::<InteractionDisabled>();
     }
-
-
 }
