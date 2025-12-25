@@ -1,8 +1,9 @@
 use bevy::{prelude::*, platform::collections::*};
 
 use strum_macros::{Display, EnumIter};
+use hexx::{Hex};
 
-use crate::game_logic::resources::*;
+use crate::{game_logic::{province::*, resources::*}, scene::hex_grid::*};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, EnumIter, Display)]
 pub enum SoldierType {
@@ -13,6 +14,12 @@ impl SoldierType {
     pub fn recruit_cost(&self) -> HashMap<ResourceType, f32> {
         match self {
             SoldierType::Infantry => [(ResourceType::Gold, 1.0), (ResourceType::Grain, 5.0)].into(),
+        }
+    }
+
+    pub fn march_budget(&self) -> u32 {
+        match self {
+            SoldierType::Infantry => 10,
         }
     }
 }
@@ -32,14 +39,13 @@ impl Soldier {
     }
 }
 
-
 #[derive(Component, Debug)]
 pub struct Army {
     pub atype: SoldierType,
     pub soldiers: Vec<Soldier>,
     pub empire: Entity,
     pub id: u32,
-    pub locked: bool /* If moved this turn */
+    moved: bool /* If moved this turn */
 }
 
 impl Army {
@@ -49,8 +55,16 @@ impl Army {
             soldiers: vec![soldier],
             empire,
             id,
-            locked: false
+            moved: false
         }
+    }
+
+    pub fn march_budget(&self) -> u32 {
+        if self.soldiers.len() < 10 {
+            return self.atype.march_budget();
+        }
+
+        return self.atype.march_budget() / 2;
     }
 
     pub fn soldier_type(&self) -> SoldierType {
@@ -86,12 +100,16 @@ impl Army {
         self.soldiers.len()
     }
 
+    pub fn set_moved(&mut self) {
+        self.moved = true;
+    }
+
     pub fn moved(&self) -> bool {
-        self.locked
+        self.moved
     }
 
     pub fn reset_moved(&mut self) {
-        self.locked = false;
+        self.moved = false;
     }
 }
 
@@ -124,4 +142,58 @@ impl ProvinceArmies {
     pub fn armies(&self) -> &Vec<Entity> {
         &self.0
     }
+}
+
+/* Events */
+#[derive(Event, Debug)]
+pub struct ArmyMoved {
+    pub army: Entity,
+    pub province: Entity
+}
+
+/* Systems */
+
+pub fn move_army(
+    event: On<ArmyMoved>,
+    mut q_armies: Query<&mut Army>,
+    mut commands: Commands
+) {
+    commands
+        .entity(event.army)
+        .remove::<ArmyProvince>()
+        .insert(ArmyProvince(event.province));
+
+    let Ok(mut army_c) = q_armies.get_mut(event.army) else {
+        error!("{}:{} Missing army component", file!(), line!());
+        return;
+    };
+    army_c.set_moved();
+}
+
+pub fn get_reachable_tiles(
+    army_c: &Army,
+    province_c: &Province,
+    q_provinces: &Query<&Province>,
+    grid: &Res<HexGrid>
+) -> HashSet<Entity> {
+
+    let budget = army_c.march_budget();
+    let const_func = |hex: Hex| {
+        let Some(province_e) = grid.get_entity(&hex) else {
+            return None;
+        };
+        let Ok(province_c) = q_provinces.get(*province_e) else {
+            return None;
+        };
+
+        return province_c.march_cost();
+    };
+
+    let hex_set = hexx::algorithms::field_of_movement(province_c.hex(), budget, const_func);
+
+    return hex_set
+        .into_iter()
+        .filter_map(|hex| grid.get_entity(&hex))
+        .cloned()
+        .collect();
 }

@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::game_logic::{empire::*, province::*};
+use crate::game_logic::{empire::*, province::*, armies::*};
 
 pub struct GameEventPlugin;
 
@@ -16,6 +16,7 @@ impl Plugin for GameEventPlugin {
             .add_observer(calculate_empire_pops_income)
             .add_observer(recruit_soldier)
             .add_observer(create_army)
-            .add_observer(disband_army);
+            .add_observer(disband_army)
+            .add_observer(move_army);
     }
 }

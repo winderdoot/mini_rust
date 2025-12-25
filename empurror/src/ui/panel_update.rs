@@ -538,7 +538,7 @@ pub fn update_treasury_panel(
 pub fn update_armies_panel(
     keyboard: Res<ButtonInput<KeyCode>>,
     picked: Res<PickedProvince>,
-    mut q_provinces: Query<(&mut Province, &ControlledBy, Option<&mut ProvinceArmies>)>,
+    mut q_provinces: Query<(&mut Province, Option<&ControlledBy>, Option<&mut ProvinceArmies>)>,
     mut q_armies: Query<&mut Army>,
     q_empires: Query<&Empire>,
     mut nodes: ParamSet<(
@@ -563,16 +563,16 @@ pub fn update_armies_panel(
     let PickedProvince::Selected(province) = *picked else {
         return;
     };
-    let Ok((mut province_c, controlled_by, armies_c)) = q_provinces.get_mut(province) else {
+    let Ok((mut province_c, controlled_by_o, armies_c)) = q_provinces.get_mut(province) else {
         return;
     };
-    let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
-        error!("{}:{} Empire component missing", file!(), line!());
-        return;
-    };
-    if empire_c.id != PLAYER_EMPIRE {
-        return;
-    }
+    // let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
+    //     error!("{}:{} Empire component missing", file!(), line!());
+    //     return;
+    // };
+    // if empire_c.id != PLAYER_EMPIRE {
+    //     return;
+    // }
 
     let armies_count =
     if let Some(armies_c) = &armies_c {
@@ -639,7 +639,7 @@ pub fn update_armies_panel(
 
         /* Pre text */
         let pre_text = &mut *text.p1();
-        pre_text.0 = String::from("Stationed armies: (K - up, J - down)\n");
+        pre_text.0 = String::from("Stationed armies: (K - up, J - down, M - move)\n");
 
         prov_armies
             .iter()
@@ -650,7 +650,7 @@ pub fn update_armies_panel(
                     return;
                 };
 
-                let moved_text = if army_c.locked { " (moved)" } else { "" };
+                let moved_text = if army_c.moved() { " (moved)" } else { "" };
                 pre_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
             });
 
@@ -660,7 +660,7 @@ pub fn update_armies_panel(
             error!("{}:{} Missing army component", file!(), line!());
             return;
         };
-        let moved_text = if sel_army_c.locked { " (moved)" } else { "" };
+        let moved_text = if sel_army_c.moved() { " (moved)" } else { "" };
         let (sel_text, text_font, text_color) = &mut *text.p2();
         sel_text.0 = format!("{}: {} units{} (H/L to remove/add units)", *sel_army_c, sel_army_c.soldier_count(), moved_text);
         /* These parameters could be the same from the beginning and stay unmodified */
@@ -694,14 +694,11 @@ pub fn update_armies_panel(
                     return;
                 };
 
-                let moved_text = if army_c.locked { " (moved)" } else { "" };
+                let moved_text = if army_c.moved() { " (moved)" } else { "" };
                 post_text.0.push_str(&format!("{}: {} units{}\n", army_c, army_c.soldier_count(), moved_text));
             });
 
     }
-
-    /* Todo: display the army list and mark the selected army */
-    /* Make an ArmyCreated/ArmyDisbanded event? in province probably, add an empire field to army */
 
     /* Handle the buttons */
     let disband_but_ent = &mut *buttons.p1();

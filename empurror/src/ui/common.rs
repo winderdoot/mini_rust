@@ -1,21 +1,7 @@
 use bevy::{prelude::*};
 use bevy_ui_widgets::UiWidgetsPlugins;
 
-use crate::{game_logic::game_states::GridViewMode, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, panel_update::*, button_update::*}};
-
-/* Systems */
-fn toggle_province_view(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    view: Res<State<GridViewMode>>,
-    mut next_view: ResMut<NextState<GridViewMode>>
-) {
-    if keyboard.just_pressed(KeyCode::KeyV) {
-        match view.get() {
-            GridViewMode::Terrain => next_view.set(GridViewMode::Empire),
-            GridViewMode::Empire => next_view.set(GridViewMode::Terrain),
-        }
-    }
-}
+use crate::{game_logic::game_states::*, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, panel_update::*, button_update::*, views::*}};
 
 /* Init Plugin */
 pub struct GameUIPlugin;
@@ -36,6 +22,7 @@ impl Plugin for GameUIPlugin {
             .add_systems(Update, 
                 (
                     toggle_province_view,
+                    toggle_movement_view,
                     assign_residents_interaction,
                     update_treasury_panel,
                     update_province_panel_group,
@@ -53,10 +40,16 @@ impl Plugin for GameUIPlugin {
                 .in_set(UpdateSystems::UIUpdate)
             )
             .add_systems(OnEnter(GridViewMode::Empire),
-                set_empire_materials
+                reset_province_materials
             )
             .add_systems(OnExit(GridViewMode::Empire),
-                set_terrain_materials
-            );  
+                reset_province_materials
+            )
+            .add_systems(OnEnter(ArmyMovementView::On),
+                reset_province_materials
+            )
+            .add_systems(OnExit(ArmyMovementView::On),
+                reset_province_materials
+            );
     }
 }

@@ -29,6 +29,15 @@ pub enum GridViewMode {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
 #[source(AppState = AppState::InGame)]
 #[states(scoped_entities)]
+pub enum ArmyMovementView {
+    #[default]
+    Off,
+    On,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+#[source(AppState = AppState::InGame)]
+#[states(scoped_entities)]
 pub enum IsPaused {
     #[default]
     Running,
@@ -44,7 +53,8 @@ impl Plugin for GameStatePlugin {
             .insert_state::<AppState>(AppState::InGame)
             .add_sub_state::<IsPlayerTurn>()
             .add_sub_state::<GridViewMode>()
-            .add_sub_state::<IsPaused>();
+            .add_sub_state::<IsPaused>()
+            .add_sub_state::<ArmyMovementView>();
     }
 }
 

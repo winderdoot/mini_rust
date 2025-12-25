@@ -1,6 +1,6 @@
 use bevy::{
-    asset::RenderAssetUsages, mesh::Indices, platform::collections::HashMap,
-    prelude::*, render::render_resource::{PrimitiveTopology}
+    asset::RenderAssetUsages, mesh::Indices, platform::collections::{HashMap, HashSet},
+    prelude::*, render::render_resource::PrimitiveTopology
 };
 
 use hexx::{shapes, *};
@@ -28,11 +28,12 @@ pub struct HexGridSettings {
     pub materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
     pub hover_materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
     pub select_materials: HashMap<ProvinceType, Handle<StandardMaterial>>,
-    pub empire_materials: HashMap<(ProvinceType, u32), Handle<StandardMaterial>>
+    pub empire_materials: HashMap<(ProvinceType, u32), Handle<StandardMaterial>>,
+    pub reachable_materials: HashMap<ProvinceType, Handle<StandardMaterial>>
 }
 
 impl HexGridSettings {
-    pub fn province_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
+    pub fn terrain_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
         self.materials.get(province).unwrap().clone()
     }
 
@@ -47,15 +48,20 @@ impl HexGridSettings {
     pub fn select_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
         self.select_materials.get(province).unwrap().clone()
     }
+
+    pub fn reachable_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
+        self.reachable_materials.get(province).unwrap().clone()
+    }
 }
+
+type MaterialMap = HashMap<ProvinceType, Handle<StandardMaterial>>;
 
 fn load_color_materials(
     materials: &mut ResMut<Assets<StandardMaterial>>,
-) -> (HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>, HashMap<ProvinceType, Handle<StandardMaterial>>) {
-    // let mut hover_map = map.clone();
-    // let mut select_map = map.clone();
+) -> (MaterialMap, MaterialMap, MaterialMap, MaterialMap) {
     let hover_emission = LinearRgba::rgb(0.2, 0.2, 0.2);
     let select_emisson = LinearRgba::rgb(0.4, 0.4, 0.4);
+    let reachable_emission = LinearRgba::rgb(0.09, 0.49, 0.27);
 
     let map: HashMap<ProvinceType, Handle<StandardMaterial>> = ProvinceType::iter()
         .map(|p| {
@@ -95,7 +101,21 @@ fn load_color_materials(
         })
         .collect();
 
-    (map, hover_map, select_map)
+    let reach_map: HashMap<ProvinceType, Handle<StandardMaterial>> = ProvinceType::iter()
+        .map(|p| {
+            let handle = materials.add(StandardMaterial {
+                base_color: p.terrain_color(),
+                perceptual_roughness: p.terrain_roughness(),
+                emissive: reachable_emission,
+                ..Default::default()
+            });
+
+            (p, handle)
+        })
+        .collect();
+
+
+    (map, hover_map, select_map, reach_map)
 }
 
 fn create_empire_materials(
@@ -130,7 +150,7 @@ pub fn load_hexgird_settings(
     mut materials: ResMut<Assets<StandardMaterial>>,
     empires: Query<&Empire>
 ) {
-    let (material_map, hover_map, select_map) = load_color_materials(&mut materials);
+    let (material_map, hover_map, select_map, reach_map) = load_color_materials(&mut materials);
     let empire_map = create_empire_materials(&material_map, &mut materials, &empires);
 
     commands.insert_resource(HexGridSettings {
@@ -141,7 +161,8 @@ pub fn load_hexgird_settings(
         materials: material_map,
         hover_materials: hover_map,
         empire_materials: empire_map,
-        select_materials: select_map
+        select_materials: select_map,
+        reachable_materials: reach_map
     });
 }
 
@@ -211,7 +232,7 @@ pub fn setup_hexgrid(
     let tile_entities: IndexMap<Hex, Entity> = tiles
         .into_iter()
         .map(|(hex, mut pos, province)| {
-            let mat = settings.province_material(&province);
+            let mat = settings.terrain_material(&province);
 
             /* The prism mesh is extruded along the z axis, we have to translate it and rotate it properly */
             pos.y -= PRISM_HEIGHT * 0.5;
@@ -220,7 +241,7 @@ pub fn setup_hexgrid(
             transform.rotate_axis(Dir3::Y, HEX_Y_ROT);
 
             let id = commands.spawn((
-                Province::from_type(&province),
+                Province::from_type(&province, &hex),
                 Mesh3d(mesh_handle.clone()),
                 MeshMaterial3d(mat.clone()),
                 transform
@@ -252,6 +273,7 @@ pub fn hextile_rel_transform(tile: &Transform, rel: &Transform) -> Transform {
     Transform::from_translation(pos).with_rotation(rel.rotation).with_scale(rel.scale)
 }
 
+/* Additional resources */
 #[derive(Resource, Debug, Default)]
 pub enum PickedProvince {
     Hovered(Entity),
@@ -260,6 +282,46 @@ pub enum PickedProvince {
     None
 }
 
+#[derive(Resource, Debug, Default)]
+pub struct ArmyMovement {
+    reachable: HashSet<Entity>,
+    old_selected_province: Option<Entity>,
+    army: Option<Entity>
+}
+
+impl ArmyMovement {
+    pub fn set_army(&mut self, army: Entity) {
+        self.army = Some(army);
+    }
+
+    pub fn pop_army(&mut self) -> Option<Entity> {
+        let res = self.army;
+        self.army = None;
+
+        res
+    }
+
+    pub fn set_reachable(&mut self, set: HashSet<Entity>) {
+        self.reachable = set;
+    }
+
+    pub fn province_reachable(&self, province: &Entity) -> bool {
+        self.reachable.contains(province)
+    }
+
+    pub fn get_old_selected(&mut self) -> Option<Entity> {
+        let ret = self.old_selected_province;
+        self.old_selected_province = None;
+
+        ret
+    }
+
+    pub fn set_old_selected(&mut self, province: &Entity) {
+        self.old_selected_province = Some(province.clone());
+    }
+}
+
+
 /* Init Plugin */
 pub struct HexGridPlugin;
 
@@ -267,6 +329,7 @@ impl Plugin for HexGridPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<PickedProvince>()
+            .init_resource::<ArmyMovement>()
             .add_systems(Startup, 
                 (
                     load_hexgird_settings,

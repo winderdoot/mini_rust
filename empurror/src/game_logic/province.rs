@@ -1,4 +1,5 @@
 use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMap, prelude::*};
+use hexx::Hex;
 
 use std::{cmp::{Eq, min}, f32::consts::PI};
 use strum_macros::{Display, EnumIter};
@@ -63,6 +64,7 @@ impl ProvinceType {
 #[derive(Component)]
 pub struct Province {
     pub ptype: ProvinceType,
+    hex: Hex,
     special_building: bool,
     castle: bool,
     house_count: u32,
@@ -74,9 +76,10 @@ pub struct Province {
 }
 
 impl Province {
-    pub fn from_type(t: &ProvinceType) -> Self {
+    pub fn from_type(t: &ProvinceType, hex: &Hex) -> Self {
         Self {
             ptype: t.clone(),
+            hex: hex.clone(),
             special_building: false,
             castle: false,
             house_count: 0,
@@ -86,6 +89,10 @@ impl Province {
             income: Default::default(),
             soldiers: Default::default()
         }
+    }
+
+    pub fn hex(&self) -> Hex {
+        self.hex.clone()
     }
 
     pub fn has_pops_room(&self) -> bool {
@@ -268,6 +275,18 @@ impl Province {
                 return [(ResourceType::Gold, self.pops as f32 * 1.0)].into();
             },
             _ => Default::default()
+        }
+    }
+
+    pub fn march_cost(&self) -> Option<u32> {
+        match self.ptype {
+            ProvinceType::Water => None,
+            ProvinceType::BlackSoil => Some(2),
+            ProvinceType::Plains => Some(2),
+            ProvinceType::Woods => Some(2),
+            ProvinceType::Desert => Some(4),
+            ProvinceType::Hills => Some(3),
+            ProvinceType::Mountains => Some(5),
         }
     }
 }
