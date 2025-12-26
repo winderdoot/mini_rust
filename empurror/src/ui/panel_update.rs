@@ -32,6 +32,11 @@ pub fn income_color(val: f32) -> Color {
     }
 }
 
+#[derive(Event, Debug)]
+pub struct UpdateClaimsPanel {
+    pub province: Entity
+}
+
 /// Horrible, horrible code
 fn update_basic_province_panel(
     province_ent: &Entity,
@@ -108,40 +113,37 @@ fn update_basic_province_panel(
     p_population.0 = format!("Population: {}", p_prov.get_pops()); // TODO CALCULATE POPS
 }
 
-fn update_claims_panel(
-    province: &Entity,
-    q_empire: &Query<(&Empire, &Controls)>,
-    q_provinces: &Query<(&Province, Option<&ControlledBy>, Option<&ProvinceBuildings>)>,
-    q_prov_trans: &Query<&Transform, With<Province>>,
-    q_prov_owner: &Query<&ControlledBy, With<Province>>,
-    empires: &Res<Empires>,
-    nodes: &mut ParamSet<(
-        Single<&mut Node, With<UIProvincePanel>>,
-        Single<&mut Node, With<UIBasicProvincePanel>>,
-        Single<&mut Node, With<UIDetailedProvincePanel>>,
-        Single<(&mut Node, &mut ImageNode), With<UIProvinceFlag>>,
+pub fn update_claims_panel(
+    event: On<UpdateClaimsPanel>,
+    q_empire: Query<(&Empire, &Controls)>,
+    q_provinces: Query<(&Province, Option<&ControlledBy>, Option<&ProvinceArmies>)>,
+    q_armies: Query<&Army>,
+    empires: Res<Empires>,
+    mut nodes: ParamSet<(
         Single<&mut Node, With<UIClaimProvincePanel>>,
-        Single<&mut Node, With<BuildHouseButton>>,
-        Single<&mut Node, With<BuildResourceBuildingButton>>,
         Single<&mut Node, With<ClaimProvinceButton>>,
     )>,
-    buttons: &mut ParamSet<(
+    mut buttons: ParamSet<(
         Single<Entity, With<ClaimProvinceButton>>,
-        Single<Entity, With<BuildHouseButton>>,
-        Single<Entity, With<BuildResourceBuildingButton>>,
     )>,
-    commands: &mut Commands,
-    grid: &Res<HexGrid>,
-    turns: &Res<Turns>
+    mut commands: Commands,
+    grid: Res<HexGrid>,
+    turns: Res<Turns>
 ) {
+    let province_e = event.province;
+    let Ok((province_c, controlled_by, armies_c)) = q_provinces.get(province_e) else {
+        error!("{}:{} Province entity lacks province component", file!(), line!());
+        return;
+    };
+    if let Some(_) = controlled_by {
+        return;
+    };
+
     let Some(player_empire) = empires.player_empire() else {
         error!("{}:{} Player empire not found!", file!(), line!());
         return;
     };
-    let Ok(t) = q_prov_trans.get(*province) else {
-        return;
-    };
-    let hex = grid.layout.world_pos_to_hex(Vec2::new(t.translation.x, t.translation.z));
+    let hex = province_c.hex();
     let is_adjacent_and_non_water = hex
         .all_neighbors()
         .iter()
@@ -149,26 +151,40 @@ fn update_claims_panel(
             let Some(ent) = grid.get_entity(h) else {
                 return false;
             };
-            let Ok((p, _, _)) = q_provinces.get(*ent) else {
+            let Ok((p, controlled_by, _)) = q_provinces.get(*ent) else {
                 return false;
             };
             if let ProvinceType::Water = p.ptype {
                 return false;
             }
-            let Ok(owner) = q_prov_owner.get(*ent) else {
+            let Some(owner) = controlled_by else {
                 return false;
             };
             return owner.0 == *player_empire;
         });
+    let has_player_armies = 
+    if let Some(armies_c) = armies_c {
+        armies_c
+            .iter()
+            .any(|army_e| {
+                let Ok(army_c) = q_armies.get(army_e) else {
+                    error!("{}:{} Army component missing", file!(), line!());
+                    return false;
+                };
+                let Some(player_empire_e) = empires.get_entity(PLAYER_EMPIRE) else {
+                    error!("{}:{} Player empire entity missing", file!(), line!());
+                    return false;
+                };
+                return *player_empire_e == army_c.empire();
+            })
+    }
+    else {
+        false
+    };
     
-    if !is_adjacent_and_non_water {
+    if !has_player_armies && !is_adjacent_and_non_water {
         return;
     }
-
-    let Ok((_, _, _)) = q_provinces.get(*province) else {
-        error!("{}:{} Province entity lacks province component", file!(), line!());
-        return;
-    };
 
     let Ok((empire_c, _)) = q_empire.get(*player_empire) else {
         error!("{}:{} Empire component missing", file!(), line!());
@@ -188,7 +204,7 @@ fn update_claims_panel(
             .remove::<InteractionDisabled>();
     }
 
-    let claims = &mut *nodes.p4();
+    let claims = &mut *nodes.p0();
     claims.display = Display::Flex;
     
     return;
@@ -385,7 +401,8 @@ pub fn update_province_panel_group(
             };
             /* Claim province button */
             let Some(controlled_by) = controlled_by else {
-                update_claims_panel(&selected, &q_empire, &q_provinces, &q_prov_trans, &q_prov_owner, &empires, &mut nodes, &mut buttons, &mut commands, &grid, &turns);
+                /* Change this to an event, because the caller system ran out of available parameters (max 16)  */
+                commands.trigger(UpdateClaimsPanel { province: selected });
                 return;
             };
             let Ok((empire_c, _)) = q_empire.get(controlled_by.0) else {

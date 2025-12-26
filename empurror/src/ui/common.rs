@@ -50,6 +50,7 @@ impl Plugin for GameUIPlugin {
             )
             .add_systems(OnExit(ArmyMovementView::On),
                 reset_province_materials
-            );
+            )
+            .add_observer(update_claims_panel);
     }
 }
