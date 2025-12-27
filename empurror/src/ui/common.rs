@@ -15,7 +15,8 @@ impl Plugin for GameUIPlugin {
                     spawn_province_panel_group,
                     spawn_treasury_panel,
                     spawn_end_turn_button,
-                    spawn_units_panel_group
+                    spawn_units_panel_group,
+                    spawn_diplomacy_panel
                 )
                 .in_set(StartupSystems::CreateUI)
             )
@@ -35,7 +36,8 @@ impl Plugin for GameUIPlugin {
                     update_end_turn_button,
                     update_armies_panel,
                     update_create_army_button,
-                    update_disband_army_button
+                    update_disband_army_button,
+                    update_diplomacy_panel
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )

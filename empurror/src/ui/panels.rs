@@ -23,6 +23,8 @@ pub const BUTTON_COLOR_DISABLED: Color = Color::linear_rgba(0.05, 0.05, 0.05, 1.
 pub const ARMY_DEF_FONTSIZE: f32 = 18.0;
 pub const ARMY_SEL_FONTSIZE: f32 = 19.0;
 pub const ARMY_SEL_COLOR: Color = Color::linear_rgba(0.8, 0.8, 0.8, 1.0);
+pub const DIPLOMACY_FONTSIZE: f32 = 18.0;
+
 
 /* Reource/Component definitions */
 
@@ -122,6 +124,12 @@ pub struct CreateArmyButton;
 
 #[derive(Component, Default)]
 pub struct DisbandArmyButton;
+
+/* Diplomacy */
+#[derive(Component, Default)]
+pub struct DiplomacyPanel;
+#[derive(Component, Default)]
+pub struct DiplomacyText;
 
 /* Systems */
 
@@ -619,6 +627,40 @@ pub fn spawn_units_panel_group(
         },
         children![
             armies_panel()
+        ]
+    );
+
+    commands.spawn(container);
+}
+
+pub fn spawn_diplomacy_panel(
+    mut commands: Commands
+) {
+    let panel = (
+        DiplomacyPanel,
+        rounded_container(FlexDirection::Column, px(5)),
+        children![
+            text::<DiplomacyText>(DIPLOMACY_FONTSIZE)
+        ]
+    );
+
+    let container = (
+        Node {
+            display: Display::Flex,
+            width: auto(),
+            height: auto(),
+            position_type: PositionType::Absolute,
+            align_self: AlignSelf::Center,
+            justify_self: JustifySelf::Center,
+            /* Children */
+            align_items: AlignItems::Start,
+            flex_direction: FlexDirection::Column,
+            row_gap: px(10),
+            // padding: UiRect::new(TPL_PADDING, px(0), TPL_PADDING, TPL_PADDING),
+            ..Default::default()
+        },
+        children![
+            panel
         ]
     );
 

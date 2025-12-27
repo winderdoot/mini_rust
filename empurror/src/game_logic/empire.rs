@@ -1,5 +1,6 @@
 use bevy::{platform::collections::{HashMap, HashSet}, prelude::*};
 use strum::IntoEnumIterator;
+use std::cmp::*;
 
 use crate::game_logic::{armies::*, province::*, resources::ResourceType};
 use crate::scene::hex_grid::{HexGrid};
@@ -165,16 +166,91 @@ pub struct EmpireCount(u32);
 #[derive(Resource)]
 pub struct Empires {
     pub count: u32,
-    pub empire_entity: HashMap<u32, Entity>
+    pub empire_entity: HashMap<u32, Entity>,
+    war: HashSet<(u32, u32)>, /* Hold the lower empire id first */
+    peace: HashSet<(u32, u32)>,
+    peace_time: HashMap<(u32, u32), u32>
 }
 
 impl Empires {
+    pub fn new(count: u32, map: HashMap<u32, Entity>) -> Self {
+        Self {
+            count,
+            empire_entity: map,
+            war: Default::default(),
+            peace: Default::default(),
+            peace_time: Default::default()
+        }
+    }
+    
+    pub fn count(&self) -> u32 {
+        self.count
+    }
+
     pub fn get_entity(&self, empire_id: u32) -> Option<&Entity> {
         self.empire_entity.get(&empire_id)
     }
 
     pub fn player_empire(&self) -> Option<&Entity> {
         self.empire_entity.get(&PLAYER_EMPIRE)
+    }
+
+    fn order(a: u32, b: u32) -> (u32, u32) {
+        (min(a, b), max(a, b))
+    }
+
+    pub fn at_war(&self, empire_a: u32, empire_b: u32) -> bool {
+        let (a, b) = Self::order(empire_a, empire_b);
+        self.war.contains(&(a, b))
+    }
+
+    pub fn set_war(&mut self, empire_a: u32, empire_b: u32) {
+        let (a, b) = Self::order(empire_a, empire_b);
+        self.peace.remove(&(a, b));
+        self.war.insert((a,b));
+    }
+
+    pub fn at_peace(&self, empire_a: u32, empire_b: u32) -> bool {
+        let (a, b) = Self::order(empire_a, empire_b);
+        self.peace.contains(&(a, b))
+    }
+
+    pub fn set_peace(&mut self, empire_a: u32, empire_b: u32, turns: u32) {
+        let (a, b) = Self::order(empire_a, empire_b);
+        self.war.remove(&(a, b));
+        self.peace.insert((a,b));
+        self.peace_time.insert((a, b), turns);
+    }
+
+    pub fn peace_time(&self, empire_a: u32, empire_b: u32) -> Option<u32> {
+        let (a, b) = Self::order(empire_a, empire_b);
+        self.peace_time.get(&(a, b)).cloned()
+    }   
+
+    pub fn update_peace_time(&mut self) {
+        self.peace_time
+            .iter_mut()
+            .for_each(|((a, b), v)| {
+                if *v > 0 {
+                    *v -= 1;
+                }
+
+                if *v == 0 {
+                    self.peace.remove(&(*a, *b));
+                }
+            });
+        
+        let to_remove = self.peace_time
+            .iter()
+            .filter(|(k, v)| **v != 0)
+            .map(|(k, v)| *k)
+            .collect::<Vec<(u32, u32)>>();
+
+        to_remove
+            .iter()
+            .for_each(|k| {
+                self.peace_time.remove(k);
+            })
     }
 }
 
@@ -334,10 +410,7 @@ fn spawn_empires(
         .collect();
     
     commands.insert_resource(
-        Empires {
-            count: count.0,
-            empire_entity: map,
-        }
+        Empires ::new(count.0, map)
     );
 }
 
@@ -408,6 +481,10 @@ fn assign_provinces(
                     let Ok(ProvinceType::Plains) = provinces.get(*tile).map(|p| &p.ptype) else {
                         return false;
                     };
+
+                    if assigned.contains(tile) {
+                        return false;
+                    }
                     
                     true
                 });

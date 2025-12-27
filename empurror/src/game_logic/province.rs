@@ -2,9 +2,10 @@ use bevy::{color::palettes::{css::*, tailwind::*}, platform::collections::HashMa
 use hexx::Hex;
 
 use std::{cmp::{Eq, min}, f32::consts::PI};
+use rand;
 use strum_macros::{Display, EnumIter};
 
-use crate::game_logic::{armies::*, empire::{Controls, Empire}, resources::ResourceType};
+use crate::game_logic::{armies::*, empire::{Controls, Empire, PopsIncomeChanged, ResourceIncomeChanged}, resources::ResourceType};
 use crate::scene::assets::Models;   
 use crate::scene::{hex_grid};
 
@@ -91,6 +92,12 @@ impl Province {
             soldiers: Default::default(),
             army_model: None
         }
+    }
+
+    pub fn drop_population(&mut self) {
+        let mut range = (self.pops / 5)..(self.pops / 2 + 1);
+        let died = rand::random_range(range);
+        self.pops -= died;
     }
 
     pub fn get_army_model(&self) -> Option<Entity> {
@@ -417,7 +424,75 @@ pub struct ProvinceArmyChanged {
     pub province: Entity
 }
 
+#[derive(Event, Debug)]
+pub struct ProvinceOcuppied {
+    pub province: Entity, 
+    pub empire: Entity
+}
+
 /* Systems */
+pub fn occupy_province(
+    event: On<ProvinceOcuppied>,
+    mut q_provinces: Query<(&mut Province, &ControlledBy)>,
+    mut q_armies: Query<(Entity, &mut Army)>,
+    mut commands: Commands
+) {
+    let Ok((mut province_c, controlled_by)) = q_provinces.get_mut(event.province) else {
+        error!("{}:{} Missing province component", file!(), line!());
+        return;
+    };
+    let old_empire_e = controlled_by.entity();
+
+    if province_c.has_castle() {
+        /* Remove all soldiers that have homes in this province. They're qutting their jobs */
+
+        q_armies
+            .iter_mut()
+            .for_each(|(army_e, mut army_c)| {
+                let to_remove = army_c
+                    .soldiers_iter()
+                    .enumerate()
+                    .filter_map(|(i, soldier)| {
+                        if soldier.home_province == event.province {
+                            Some(i)
+                            }
+                            else {
+                                None
+                            }
+                        })
+                    .collect::<Vec<usize>>();
+
+                let soldiers = army_c.soldiers_mut();
+                to_remove
+                    .iter()
+                    .for_each(|i| {
+                        soldiers.remove(*i);
+                    });
+                
+                if army_c.soldier_count() == 0 {
+                    commands
+                        .entity(army_e)
+                        .despawn();
+                }
+            });
+    }
+    else {
+        province_c.drop_population();
+    }
+
+    commands
+        .entity(event.province)
+        .insert(ControlledBy(event.empire));
+
+    commands.trigger(ProvinceIncomeChanged { province: event.province });
+
+    commands.trigger(ResourceIncomeChanged { empire: event.empire });
+    commands.trigger(PopsIncomeChanged { empire: event.empire });
+    
+    commands.trigger(ResourceIncomeChanged { empire: old_empire_e });
+    commands.trigger(PopsIncomeChanged { empire: old_empire_e });
+}
+
 pub fn update_army_model(
     event: On<ProvinceArmyChanged>,
     models: Res<Models>,

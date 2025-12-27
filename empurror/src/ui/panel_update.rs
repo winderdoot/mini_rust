@@ -181,7 +181,7 @@ pub fn update_claims_panel(
     else {
         false
     };
-    
+
     if !has_player_armies && !is_adjacent_and_non_water {
         return;
     }
@@ -401,8 +401,9 @@ pub fn update_province_panel_group(
             };
             /* Claim province button */
             let Some(controlled_by) = controlled_by else {
-                /* Change this to an event, because the caller system ran out of available parameters (max 16)  */
+                /* Change this to an event, because the caller system ran out of available parameters (max 16) */
                 commands.trigger(UpdateClaimsPanel { province: selected });
+ 
                 return;
             };
             let Ok((empire_c, _)) = q_empire.get(controlled_by.0) else {
@@ -591,13 +592,29 @@ pub fn update_armies_panel(
     //     return;
     // }
 
-    let armies_count =
-    if let Some(armies_c) = &armies_c {
-        armies_c.count()
+    let player_armies =
+    if let Some(armies_c) = armies_c {
+
+        armies_c
+            .iter()
+            .filter(|army_e| {
+                let Ok(army_c) = q_armies.get(*army_e) else {
+                    error!("{}:{} Missing army component", file!(), line!());
+                    return false;
+                };
+                let Ok(empire_c) = q_empires.get(army_c.empire()) else {
+                    error!("{}:{} Missing empire component", file!(), line!());
+                    return false;
+                };
+
+                return empire_c.id == PLAYER_EMPIRE;
+            })
+            .collect::<Vec<Entity>>()
     }
     else {
-        0
+        Vec::<Entity>::new()
     };
+    let armies_count = player_armies.len();
     if province_c.soldier_count() == 0 && armies_count == 0 {
         return;
     }
@@ -650,20 +667,15 @@ pub fn update_armies_panel(
         post_text.0 = String::new();
     }
     else {
-        let Some(prov_armies) = armies_c else {
-            error!("{}:{} Should be impossible", file!(), line!());
-            return;
-        };
-
         /* Pre text */
         let pre_text = &mut *text.p1();
         pre_text.0 = String::from("Stationed armies: (K - up, J - down, M - move)\n");
 
-        prov_armies
+        player_armies
             .iter()
             .take(army_panel.curr_army as usize)
             .for_each(|army_ent| {
-                let Ok(army_c) = q_armies.get(army_ent) else {
+                let Ok(army_c) = q_armies.get(*army_ent) else {
                     error!("{}:{} Missing army component", file!(), line!());
                     return;
                 };
@@ -673,7 +685,7 @@ pub fn update_armies_panel(
             });
 
         /* Selected text */
-        let sel_army_ent = prov_armies.armies()[army_panel.curr_army as usize];
+        let sel_army_ent = player_armies[army_panel.curr_army as usize];
         let Ok(mut sel_army_c) = q_armies.get_mut(sel_army_ent) else {
             error!("{}:{} Missing army component", file!(), line!());
             return;
@@ -707,12 +719,12 @@ pub fn update_armies_panel(
         let post_text = &mut *text.p3();
         post_text.0 = String::new();
 
-        prov_armies
+        player_armies
             .iter()
             .skip((army_panel.curr_army + 1) as usize)
             .take((army_panel.armies - army_panel.curr_army - 1) as usize)
             .for_each(|army_ent| {
-                let Ok(army_c) = q_armies.get(army_ent) else {
+                let Ok(army_c) = q_armies.get(*army_ent) else {
                     error!("{}:{} Missing army component", file!(), line!());
                     return;
                 };
@@ -746,5 +758,93 @@ pub fn update_armies_panel(
         commands
             .entity(*create_but_ent)
             .remove::<InteractionDisabled>();
+    }
+}
+
+pub fn update_diplomacy_panel(
+    mut empires: ResMut<Empires>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut s_nodes: ParamSet<(
+        Single<&mut Node, With<DiplomacyPanel>>,
+    )>,
+    mut s_text: ParamSet<(
+        Single<&mut Text, With<DiplomacyText>>,
+    )>,
+    mut commands: Commands
+) {
+    let node = &mut *s_nodes.p0();
+    let enabled = node.display == Display::Flex;
+
+    if keyboard.just_released(KeyCode::KeyB) {
+        node.display = match enabled {
+            true => Display::None,
+            false => Display::Flex,
+        }
+    }
+    
+    let enabled = node.display == Display::Flex;
+    if enabled {
+        let text = &mut *s_text.p0();
+        text.0 = 
+        (1..empires.count())
+            .map(|id| {
+                let at_peace = empires.at_peace(PLAYER_EMPIRE, id);
+                let at_war = empires.at_war(PLAYER_EMPIRE, id);
+                let peace_turns = empires.peace_time(PLAYER_EMPIRE, id).unwrap_or(0);
+                let status =
+                if at_peace {
+                    format!("AT PEACE for {} turns", peace_turns)
+                }
+                else if at_war {
+                    String::from("AT WAR")
+                }
+                else {
+                    String::new()
+                };
+                let action =
+                if at_peace {
+                    String::new()
+                }
+                else if at_war {
+                    format!("press {} to make peace", id)
+                }
+                else {
+                    format!("press {} to wage war", id)
+                };
+
+                format!("Empire {}: {} {}\n", id, status, action)
+            })
+            .collect::<Vec<String>>()
+            .join("");
+
+        let keycode_to_id: HashMap<KeyCode, u32> = [
+            (KeyCode::Digit1, 1),
+            (KeyCode::Digit2, 2),
+            (KeyCode::Digit3, 3),
+            (KeyCode::Digit4, 4),
+            (KeyCode::Digit5, 5),
+            (KeyCode::Digit6, 6),
+            (KeyCode::Digit7, 7),
+            (KeyCode::Digit8, 8),
+            (KeyCode::Digit9, 9),
+        ].into();
+
+        keyboard
+            .get_just_released()
+            .for_each(|k| {
+                if let Some(empire_id) = keycode_to_id.get(k) {
+                    if empires.count() <= *empire_id {
+                        return;
+                    }
+                    if empires.at_war(PLAYER_EMPIRE, *empire_id) {
+                        /* Try to make peace */
+                        empires.set_peace(PLAYER_EMPIRE, *empire_id, 10);
+                    }
+                    else if !empires.at_peace(PLAYER_EMPIRE, *empire_id) {
+                        /* Wage war */
+                        empires.set_war(PLAYER_EMPIRE, *empire_id);
+                    }
+                }
+            });
     }
 }
