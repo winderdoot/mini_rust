@@ -242,7 +242,7 @@ impl Empires {
         
         let to_remove = self.peace_time
             .iter()
-            .filter(|(k, v)| **v != 0)
+            .filter(|(k, v)| **v == 0)
             .map(|(k, v)| *k)
             .collect::<Vec<(u32, u32)>>();
 

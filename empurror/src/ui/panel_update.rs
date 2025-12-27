@@ -790,7 +790,7 @@ pub fn update_diplomacy_panel(
             .map(|id| {
                 let at_peace = empires.at_peace(PLAYER_EMPIRE, id);
                 let at_war = empires.at_war(PLAYER_EMPIRE, id);
-                let peace_turns = empires.peace_time(PLAYER_EMPIRE, id).unwrap_or(0);
+                let peace_turns = empires.peace_time(PLAYER_EMPIRE, id).unwrap_or(2137);
                 let status =
                 if at_peace {
                     format!("AT PEACE for {} turns", peace_turns)

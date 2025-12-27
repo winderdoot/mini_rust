@@ -55,7 +55,7 @@ fn init_turns(
 fn turn_ended(
     event: On<EndTurn>,
     mut turns: ResMut<Turns>,
-    empires: Res<Empires>,
+    mut empires: ResMut<Empires>,
     mut q_empires: Query<&mut Empire>,
     mut commands: Commands
 ) {
@@ -75,6 +75,7 @@ fn turn_ended(
 
     if event.empire_id == turns.empire_count - 1 {
         turns.completed_rounds += 1;
+        empires.update_peace_time();
     }
 
     let next_empire = (event.empire_id + 1) % turns.empire_count;

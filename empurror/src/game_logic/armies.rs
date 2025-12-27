@@ -314,7 +314,6 @@ pub fn move_army(
             /* No armies present, the province is occupied by the entering army  */
             commands.trigger(ProvinceOcuppied { province: event.province, empire: army_c.empire() });
         }
-
     }
 
     let Ok((mut army_c, _)) = q_armies.get_mut(event.army) else {
