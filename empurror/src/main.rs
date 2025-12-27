@@ -2,7 +2,7 @@ use bevy::{prelude::*, dev_tools::fps_overlay::{FpsOverlayPlugin}, light::Cascad
 
 use std::f32::consts::{PI};
 
-use empurror::game_logic::{turns::*, events::GameEventPlugin, empire::EmpirePlugin, game_states::*, recently_moved::RecentlyMovedPlugin};
+use empurror::{ai::core::EmpireAIPlugin, game_logic::{empire::EmpirePlugin, events::GameEventPlugin, game_states::*, recently_moved::RecentlyMovedPlugin, turns::*}};
 use empurror::scene::{assets::GameModelsPlugin, hex_grid::*, orbit_camera::*};
 use empurror::game_systems::*;
 use empurror::ui::common::GameUIPlugin;
@@ -26,7 +26,8 @@ fn main() {
                 GameUIPlugin,
                 RecentlyMovedPlugin,
                 GameEventPlugin,
-                EmpirePlugin { empire_count: 5 }
+                EmpirePlugin { empire_count: 5 },
+                EmpireAIPlugin
             )
         )
         .add_systems(Startup, setup_light)

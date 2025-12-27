@@ -11,6 +11,7 @@ pub enum StartupSystems {
     AssignEmpireProvinces,
     InitTurns, /* Here we will have to enable ui, so we mind need a new state  */
     CreateUI,
+    CreateAI,
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
@@ -63,7 +64,8 @@ impl Plugin for GameSystemsPlugin {
                 StartupSystems::CreateHexGrid,
                 StartupSystems::AssignEmpireProvinces,
                 StartupSystems::InitTurns,
-                StartupSystems::CreateUI
+                StartupSystems::CreateUI,
+                StartupSystems::CreateAI
             ).chain())
             .configure_sets(Update, (
                 UpdateSystems::Camera,

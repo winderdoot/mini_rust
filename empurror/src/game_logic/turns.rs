@@ -2,7 +2,7 @@ use std::f32::consts::E;
 
 use bevy::prelude::*;
 
-use crate::{game_logic::empire::*, game_systems::{GameSystems, StartupSystems}};
+use crate::{game_logic::empire::*, game_systems::{GameSystems, StartupSystems}, ai::core::*};
 
 #[derive(Resource)]
 pub struct Turns {
@@ -71,7 +71,7 @@ fn turn_ended(
     };
     empire_c.apply_income();
 
-    info!("Empire {} ends it's turn", event.empire_id);
+    // info!("Empire {} ends it's turn", event.empire_id);
 
     if event.empire_id == turns.empire_count - 1 {
         turns.completed_rounds += 1;
@@ -98,7 +98,7 @@ fn turn_started(
         return;
     };
     
-    info!("Empire {} starts it's turn", event.empire_id);
+    // info!("Empire {} starts it's turn", event.empire_id);
     turns.current_empire = event.empire_id;
 
     commands.trigger(ResetEmpireArmies { empire: *empire_ent });
@@ -109,7 +109,7 @@ fn turn_started(
         /* Enable UI  */
     }
     else {
-        /* Do something else */
+        commands.trigger(AIPlayTurn { empire_id: event.empire_id });
         commands.trigger(EndTurn { empire_id: event.empire_id });
     }
 }

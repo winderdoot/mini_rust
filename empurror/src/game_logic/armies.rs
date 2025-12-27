@@ -176,6 +176,7 @@ pub struct ArmyMoved {
 
 /* Systems */
 
+/// Horrible, it used to be simple once
 pub fn move_army(
     event: On<ArmyMoved>,
     mut q_armies: Query<(&mut Army, &ArmyProvince)>,
@@ -190,7 +191,6 @@ pub fn move_army(
         return;
     };
     let starting_prov = starting_province.entity();
-    std::mem::drop(starting_province);
     
     /* Check if this tile has armies we should fight first */
 
@@ -214,7 +214,6 @@ pub fn move_army(
         }
 
         let mut attack_count = army_c.soldier_count();
-        std::mem::drop(army_c);
 
         if let Some(stationed_armies_c) = prov_armies_c {
             let stationed_armies = stationed_armies_c
