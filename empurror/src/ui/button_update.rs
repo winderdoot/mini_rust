@@ -104,7 +104,7 @@ pub fn update_build_house_button(
     mut text_query: Query<&mut Text>,
     pick: Res<PickedProvince>,
     empires: Res<Empires>,
-    mut q_empires: Query<&mut Empire>,
+    mut q_empires: Query<(Entity, &mut Empire)>,
     mut commands: Commands,
 ) {
     let (pressed, hovered, disabled, color, children) = &mut *button;
@@ -124,7 +124,7 @@ pub fn update_build_house_button(
             error!("Missing player empire");
             return;
         };
-        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
+        let Ok((empire_e, mut empire_c)) = q_empires.get_mut(*player_empire) else {
             error!("Player empire component missing");
             return;
         };
@@ -133,6 +133,7 @@ pub fn update_build_house_button(
 
         commands.entity(*button_ent).remove::<Pressed>();
         commands.trigger(HouseAdded { province }); /* Causes the province to calculate it's income too */
+        commands.trigger(PopsIncomeChanged { empire: empire_e });
     }
 }
 

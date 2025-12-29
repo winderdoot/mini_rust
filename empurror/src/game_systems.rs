@@ -1,7 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_ecs::system::SystemId;
 
-use crate::{game_logic::empire::*};
+use crate::{game_logic::empire::*, scene::mesh_highlight::*};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum StartupSystems {
@@ -54,7 +54,8 @@ pub struct GameSystemsPlugin;
 impl Plugin for GameSystemsPlugin {
     fn build(&self, app: &mut App) {
         let game_systems = GameSystems::new()
-            .add(stringify!(calculate_all_provinces_income), app.register_system(calculate_all_provinces_income));
+            .add(stringify!(calculate_all_provinces_income), app.register_system(calculate_all_provinces_income))
+            .add(stringify!(reset_province_materials), app.register_system(reset_province_materials));
 
         app
             .insert_resource(game_systems)

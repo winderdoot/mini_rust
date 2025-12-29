@@ -21,7 +21,7 @@ impl Controls {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Empire {
     pub id: u32, /* 0..empire_count  */
     pub color: Color,
@@ -37,6 +37,7 @@ pub struct Empire {
     pub pops_free: u32,
     pub pops_income: u32,
     pub soldiers: u32,
+    pub max_soldiers: u32
 }
 
 pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> f32 {
@@ -64,7 +65,8 @@ impl Empire {
             pops_free: 2,
             pops_income: 0,
             soldiers: 0,
-            armies_created: 0
+            armies_created: 0,
+            .. Default::default()
         }
     }
 
@@ -388,6 +390,13 @@ pub fn calculate_empire_pops_income(
         .flat_map(|p_ent| q_provinces.get(*p_ent))
         .map(|province| province.get_pops_income())
         .sum();
+
+    empire_c.max_soldiers = controls.0
+        .iter()
+        .flat_map(|p_ent| q_provinces.get(*p_ent))
+        .filter(|province_c| province_c.has_castle())
+        .map(|province| province.get_max_pops())
+        .sum();
 }
 
 fn spawn_empires(
@@ -418,7 +427,8 @@ pub fn claim_province(
     event: On<ProvinceClaimed>,
     mut q_provinces: Query<&mut Province>,
     mut q_empires: Query<&mut Empire>,
-    mut commands: Commands
+    mut commands: Commands,
+    systems: Res<GameSystems>
 ) {
     let Ok(mut prov) = q_provinces.get_mut(event.province) else {
         error!("Missing province component");
@@ -444,6 +454,11 @@ pub fn claim_province(
     commands.trigger(ProvinceIncomeChanged { province: event.province });
     commands.trigger(ResourceIncomeChanged { empire: event.empire });
     commands.trigger(PopsIncomeChanged { empire: event.empire });
+    let Some(system) = systems.get(stringify!(reset_province_materials)) else {
+        error!("{}:{} missing game system", file!(), line!());
+        return;
+    };
+    commands.run_system(*system);
 }
 
 /// Add some starter provinces to each empire

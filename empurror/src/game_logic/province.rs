@@ -37,6 +37,18 @@ impl std::fmt::Display for ProvinceType {
 }
 
 impl ProvinceType {
+    pub fn order_id(&self) -> u32 {
+        match self {
+            ProvinceType::Water => 100,
+            ProvinceType::BlackSoil => 1,
+            ProvinceType::Plains => 2,
+            ProvinceType::Woods => 3,
+            ProvinceType::Desert => 6,
+            ProvinceType::Hills => 4,
+            ProvinceType::Mountains => 5,
+        }
+    }
+
     pub fn terrain_color(&self) -> Color {
         match self {
             ProvinceType::Water => Color::Srgba(DODGER_BLUE),
@@ -92,6 +104,10 @@ impl Province {
             soldiers: Default::default(),
             army_model: None
         }
+    }
+
+    pub fn pops_extra_room(&self) -> u32 {
+        std::cmp::max(1, self.max_pops - self.pops) - 1
     }
 
     pub fn drop_population(&mut self) {

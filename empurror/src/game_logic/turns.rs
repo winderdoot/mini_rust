@@ -15,6 +15,10 @@ impl Turns {
     pub fn is_player_turn(&self) -> bool {
         self.current_empire == PLAYER_EMPIRE
     }
+
+    pub fn full_rounds(&self) -> u32 {
+        self.completed_rounds
+    }
 }
 
 /// Used to mark the end of a turn, so that empire actions can be calculated and have proper effect.
