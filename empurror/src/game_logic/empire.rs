@@ -36,8 +36,9 @@ pub struct Empire {
     pub pops_total: u32,
     pub pops_free: u32,
     pub pops_income: u32,
-    pub soldiers: u32,
-    pub max_soldiers: u32
+
+    pub soldiers: u32,    /* Number of recruited soldiers */
+    pub max_soldiers: u32 /* Max soldier number, empire could recruit */
 }
 
 pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> f32 {
@@ -92,6 +93,10 @@ impl Empire {
         self.soldiers += 1;
     }
 
+    pub fn remove_soldier(&mut self) {
+        self.soldiers -= 1;
+    }
+
     pub fn get_pops(&self) -> u32 {
         self.pops_total
     }
@@ -122,6 +127,10 @@ impl Empire {
         self.resource_total.get(typ).cloned().unwrap_or(0.0)
     }
 
+    pub fn total_income(&self) -> &HashMap<ResourceType, f32> {
+        &self.resource_income
+    }
+
     pub fn get_income(&self, typ: &ResourceType) -> f32 {
         self.resource_income.get(typ).cloned().unwrap_or(0.0)
     }
@@ -139,6 +148,14 @@ impl Empire {
             .iter()
             .all(|(k, v)| {
                 self.get_total(k) >= *v
+            })
+    }
+
+    pub fn has_income_for(&self, cost: &HashMap<ResourceType, f32>) -> bool {
+        cost
+            .iter()
+            .all(|(k, v)| {
+                self.get_income(k) >= *v
             })
     }
 

@@ -181,7 +181,7 @@ pub fn move_army(
     event: On<ArmyMoved>,
     mut q_armies: Query<(&mut Army, &ArmyProvince)>,
     mut q_provinces: Query<(&mut Province, Option<&ControlledBy>, Option<&ProvinceArmies>)>,
-    q_empires: Query<&Empire>,
+    mut q_empires: Query<&mut Empire>,
     empires: Res<Empires>,
     mut commands: Commands
 ) {
@@ -191,10 +191,11 @@ pub fn move_army(
         return;
     };
     let starting_prov = starting_province.entity();
+    info!("[{}] army {} moved to {}", army_c.empire(), event.army, event.province);
     
     /* Check if this tile has armies we should fight first */
 
-    let Ok((province_c, controlled_by, prov_armies_c)) = q_provinces.get_mut(event.province) else {
+    let Ok((_, controlled_by, prov_armies_c)) = q_provinces.get_mut(event.province) else {
         error!("{}:{} MIssing province component", file!(), line!());
         return;
     };
@@ -239,11 +240,16 @@ pub fn move_army(
                     
                     /* Remove killed soldiers from their home province */
                     (0..removed)
-                        .for_each(|i| {
-                            let Some(soldier) = defending_army.try_remove_soldier() else {
+                        .for_each(|_| {
+                            let Some(_) = defending_army.try_remove_soldier() else {
                                 error!("{}:{} BAD!", file!(), line!());
                                 return;
                             };
+                            let Ok(mut army_empire_c) = q_empires.get_mut(defending_army.empire()) else {
+                                error!("{}:{} BAD!", file!(), line!());
+                                return;
+                            };
+                            army_empire_c.remove_soldier();
 
                             let Ok((mut province_c, _, _)) = q_provinces.get_mut(army_prov.entity()) else {
                                 error!("{}:{} Missing province component", file!(), line!());
@@ -265,8 +271,8 @@ pub fn move_army(
                 .iter()
                 .for_each(|army_e| {
                     commands
-                    .entity(*army_e)
-                    .despawn();
+                        .entity(*army_e)
+                        .despawn();
             });
 
             let Ok((mut army_c, army_prov)) = q_armies.get_mut(event.army) else {
@@ -277,11 +283,16 @@ pub fn move_army(
             let killed_attackers = army_count - attack_count;
 
             (0..killed_attackers)
-                .for_each(|i| {
-                    let Some(soldier) = army_c.try_remove_soldier() else {
+                .for_each(|_| {
+                    let Some(_) = army_c.try_remove_soldier() else {
                         error!("{}:{} BAD!", file!(), line!());
                         return;
                     };
+                    let Ok(mut army_empire_c) = q_empires.get_mut(army_c.empire()) else {
+                        error!("{}:{} BAD!", file!(), line!());
+                        return;
+                    };
+                    army_empire_c.remove_soldier();
 
                     let Ok((mut province_c, _, _)) = q_provinces.get_mut(army_prov.entity()) else {
                         error!("{}:{} Missing province component", file!(), line!());

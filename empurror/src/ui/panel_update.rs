@@ -558,7 +558,8 @@ pub fn update_armies_panel(
     picked: Res<PickedProvince>,
     mut q_provinces: Query<(&mut Province, Option<&ControlledBy>, Option<&mut ProvinceArmies>)>,
     mut q_armies: Query<&mut Army>,
-    q_empires: Query<&Empire>,
+    mut q_empires: Query<&mut Empire>,
+    empires: Res<Empires>,
     mut nodes: ParamSet<(
         Single<(&mut Node, &mut ArmiesPanel)>,
     )>,
@@ -584,14 +585,17 @@ pub fn update_armies_panel(
     let Ok((mut province_c, controlled_by_o, armies_c)) = q_provinces.get_mut(province) else {
         return;
     };
-    // let Ok(empire_c) = q_empires.get(controlled_by.entity()) else {
-    //     error!("{}:{} Empire component missing", file!(), line!());
-    //     return;
-    // };
-    // if empire_c.id != PLAYER_EMPIRE {
-    //     return;
-    // }
+    if let Some(owner) = controlled_by_o {
+        let Ok(empire_c) = q_empires.get(owner.entity()) else {
+            error!("{}:{} Empire component missing", file!(), line!());
+            return;
+        };
+        if empire_c.id != PLAYER_EMPIRE {
+            return;
+        }
+    }
 
+    
     let player_armies =
     if let Some(armies_c) = armies_c {
 
@@ -618,7 +622,16 @@ pub fn update_armies_panel(
     if province_c.soldier_count() == 0 && armies_count == 0 {
         return;
     }
-
+    
+    let Some(player_empire_e) = empires.get_entity(PLAYER_EMPIRE) else {
+        error!("{}:{} Missing player empire enitty", file!(), line!());
+        return;
+    };
+    let Ok(mut player_empire_c) = q_empires.get_mut(*player_empire_e) else {
+        error!("{}:{} Missing player empire component", file!(), line!());
+        return;
+    };
+    
     /* Display the panel */
     tpl_node.display = Display::Flex;
 

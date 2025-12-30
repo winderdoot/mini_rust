@@ -55,8 +55,11 @@ pub fn toggle_movement_view(
             return empire_c.id == PLAYER_EMPIRE;
         })
         .collect::<Vec<Entity>>();
-    let army_e = player_armies[army_panel.curr_army as usize];
-    let Ok(army_c) = q_armies.get(army_e) else {
+
+    let Some(army_e) = player_armies.get(army_panel.curr_army as usize) else {
+        return;
+    };
+    let Ok(army_c) = q_armies.get(*army_e) else {
         error!("{}:{} Missing army component", file!(), file!());
         return;
     };

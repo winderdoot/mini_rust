@@ -1,6 +1,9 @@
 use bevy::{platform::collections::HashMap, prelude::*};
+use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use std::{cmp, fmt};
+
+use crate::game_logic::empire::resource_amount;
 
 #[derive(Clone, Copy, Debug, PartialEq, cmp::Eq, Hash, EnumIter)]
 pub enum ResourceType {
@@ -24,4 +27,14 @@ pub fn resource_string(map: &HashMap<ResourceType, f32>) -> String {
         })
         .collect::<Vec<String>>()
         .join("")
+}
+
+pub fn add_resources(a: &HashMap<ResourceType, f32>, b: &HashMap<ResourceType, f32>) -> HashMap<ResourceType, f32> {
+    ResourceType::iter()
+        .map(|k| {
+            let total = resource_amount(&a, &k) + resource_amount(&b, &k);
+
+            (k, total)
+        })
+        .collect()
 }

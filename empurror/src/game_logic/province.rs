@@ -5,7 +5,7 @@ use std::{cmp::{Eq, min}, f32::consts::PI};
 use rand;
 use strum_macros::{Display, EnumIter};
 
-use crate::game_logic::{armies::*, empire::{Controls, Empire, PopsIncomeChanged, ResourceIncomeChanged}, resources::ResourceType};
+use crate::game_logic::{armies::*, empire::{Controls, Empire, PopsIncomeChanged, ResourceIncomeChanged}, resources::{ResourceType, add_resources}};
 use crate::scene::assets::Models;   
 use crate::scene::{hex_grid};
 
@@ -111,7 +111,7 @@ impl Province {
     }
 
     pub fn drop_population(&mut self) {
-        let mut range = (self.pops / 5)..(self.pops / 2 + 1);
+        let range = (self.pops / 5)..(self.pops / 2 + 1);
         let died = rand::random_range(range);
         self.pops -= died;
     }
@@ -260,11 +260,11 @@ impl Province {
         min(1, self.max_pops - self.pops)
     }
 
-    fn upkeep(&self) -> HashMap<ResourceType, f32> {
-        let mut pop_cost = match self.ptype {
+    fn pop_cost(&self) -> f32 {
+        match self.ptype {
             ProvinceType::Water => {
                 error!("Water province can't be owned");
-                return HashMap::new();
+                0.0
             },
             ProvinceType::BlackSoil => 1.0,
             ProvinceType::Plains => 1.0,
@@ -272,18 +272,32 @@ impl Province {
             ProvinceType::Desert => 4.0,
             ProvinceType::Hills => 2.25,
             ProvinceType::Mountains => 3.5,
-        };
-        if self.castle {
-            pop_cost *= 2.5;
         }
-        let gold_cost = if self.castle {
-            5.0
-        } else {
-            0.0
-        };
-        let food_cost = pop_cost * (self.pops as f32);
+    }
 
-        return HashMap::from([(ResourceType::Grain, food_cost), (ResourceType::Gold, gold_cost)]);
+    pub fn soldier_upkeep(&self) -> HashMap<ResourceType, f32>  {
+        let pop_cost = self.pop_cost() * 2.5;
+        
+        return HashMap::from([(ResourceType::Grain, pop_cost), (ResourceType::Gold, 0.5)]);
+        /* TODO: Refine soldier/province upkeep. Make sure the upeek is dropped when soldiers die.
+         * Make the ai algo for making armies and moving them to nearby provinces.  */
+    }
+
+    fn upkeep(&self) -> HashMap<ResourceType, f32> {
+        let mut resources = HashMap::<ResourceType, f32>::new();
+        let pop_resources = 
+        if self.has_castle() {
+            self.soldier_upkeep()
+        }
+        else {
+            HashMap::from([(ResourceType::Grain, self.pop_cost())])
+        };
+        (0..self.pops)
+            .for_each(|_| {
+                resources = add_resources(&resources, &pop_resources);
+            });
+        
+        resources
     }
 
     fn base_income(&self) -> HashMap<ResourceType, f32> {
@@ -548,7 +562,6 @@ pub fn update_army_model(
         },
         (Some(_), 1..) => {
             /* We don't have to do anything */ 
-            info!(" both model and army are present");
         }
     }
 }

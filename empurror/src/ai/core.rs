@@ -3,70 +3,9 @@ use bevy::{prelude::*, platform::collections::*};
 
 use std::{cmp::*, mem};
 use hexx::*;
-use strum::IntoEnumIterator;
 
-use crate::{game_logic::{armies::*, empire::*, province::*, resources::*, turns::Turns}, game_systems::StartupSystems, scene::hex_grid::HexGrid};
+use crate::{game_logic::{armies::{self, *}, empire::*, province::*, resources::*, turns::Turns}, game_systems::StartupSystems, scene::hex_grid::HexGrid};
 
-/* Constants */
-pub struct ResourceCost {
-    free_pops: u32,
-    resources: HashMap<ResourceType, f32>,
-}
-
-impl ResourceCost {
-    pub fn pops(p: u32) -> Self {
-        Self {
-            free_pops: p,
-            resources: HashMap::new()
-        }
-    }
-
-    pub fn with_resources(self, resources: HashMap<ResourceType, f32>) -> Self {
-        Self {
-            free_pops: self.free_pops,
-            resources
-        }
-    }
-
-    pub fn resources(resources: HashMap<ResourceType, f32>) -> Self {
-        Self {
-            free_pops: 0,
-            resources
-        }
-    }
-}
-
-pub enum AIAction {
-    ClaimProvince,
-    AddHouse,
-    AssignPop,
-    BuildLumberMill,
-    BuildFarm,
-    BuildStoneMine,
-    BuildGoldMine,
-    MakeNewArmy
-}
-
-impl AIAction {
-    pub fn cost(&self) -> ResourceCost {
-        match self {
-            AIAction::ClaimProvince => {
-                ResourceCost::pops(1)
-                    .with_resources(House::build_cost())
-            },
-            AIAction::AddHouse => ResourceCost::resources(House::build_cost()),
-            AIAction::AssignPop => ResourceCost::pops(1),
-            AIAction::BuildLumberMill => ResourceCost::resources(SpecialBuilding::LumberMill.build_cost()),
-            AIAction::BuildFarm => ResourceCost::resources(SpecialBuilding::Farm.build_cost()),
-            AIAction::BuildStoneMine => ResourceCost::resources(SpecialBuilding::StoneMine.build_cost()),
-            AIAction::BuildGoldMine => ResourceCost::resources(SpecialBuilding::GoldMine.build_cost()),
-            AIAction::MakeNewArmy => {
-                ResourceCost::pops(1)
-                    .with_resources(SoldierType::Infantry.recruit_cost())
-            },
-        }
-    }
-}
 
 /* Resources */
 #[derive(Default)]
@@ -82,7 +21,7 @@ pub struct AIContext {
     pub castles: u32,
     pub provinces: u32,
     /* Province -> number of armies (1 soldier each) */
-    pub guarded_provinces: HashMap<Entity, u32>
+    pub army_heatmap: HashMap<Entity, u32>
 }
 
 #[derive(Resource, Default)]
@@ -146,16 +85,113 @@ pub struct AICreateArmies {
     pub empire: Entity,
 }
 
+#[derive(Event, Debug)]
+pub struct AIMoveArmies {
+    pub empire: Entity
+}
+
 /* Systems */
-fn ai_create_army(
-    event: On<AICreateArmies>,
+/// Only moves armies defensively between controlled provinces, to spread them out evenly
+fn ai_move_armies(
+    event: On<AIMoveArmies>,
     mut contexts: ResMut<AIContexts>,
-    mut q_empires: Query<&mut Empire>,
+    q_empires: Query<&Empire>,
+    q_owned: Query<(Entity, &ControlledBy, &ProvinceArmies), With<Province>>,
     q_provinces: Query<(&Province, Option<&ControlledBy>)>,
+    q_armies: Query<&Army>,
     grid: Res<HexGrid>,
     empires: Res<Empires>,
+    mut commands: Commands
 ) {
-    let Ok(mut ai_empire) = q_empires.get_mut(event.empire) else {
+    let Ok(ai_empire) = q_empires.get(event.empire) else {
+        error!("{}:{} :((", file!(), line!());
+        return;
+    };
+    let Some(Some(context)) = contexts.map.get_mut(&ai_empire.id) else {
+        error!("{}:{} :((", file!(), line!());
+        return;
+    };
+    
+    /* First build new heat map of armies */
+    context.army_heatmap = q_owned
+        .iter()
+        .flat_map(|(province_e, controlled_by, armies_c)| {
+            if controlled_by.entity() != event.empire  {
+                return None;
+            }
+            Some((province_e, armies_c.count() as u32))
+        })
+        .collect::<HashMap<Entity, u32>>();
+
+    /* Move armies to nearby 'cold' provinces */
+    q_owned
+        .iter()
+        .for_each(|(province_e, controlled_by, armies_c)| {
+            if controlled_by.entity() != event.empire  {
+                return;
+            }
+            let Ok((province_c, _)) = q_provinces.get(province_e) else {
+                error!("{}:{} :((", file!(), line!());
+                return;
+            };
+
+            armies_c
+                .iter()
+                .for_each(|army_e| {
+                    let Ok(army_c) = q_armies.get(army_e) else {
+                        error!("{}:{} :((", file!(), line!());
+                        return;
+                    };
+                    let reachable = armies::get_reachable_tiles(
+                        &army_c, &province_c, &q_provinces,
+                        &q_empires, &grid, &empires
+                    );
+                    let Some(target_province) = reachable
+                        .iter()
+                        .flat_map(|province_e| {
+                            let Ok((_, owner)) = q_provinces.get(*province_e) else {
+                                return None;
+                            };
+                            let Some(owner) = owner else {
+                                return None;
+                            };
+                            if owner.entity() != event.empire {
+                                return None;
+                            }
+                            let heat = context.army_heatmap.get(province_e).cloned().unwrap_or(0);
+
+                            Some((province_e, heat))
+                        })
+                        .min_by_key(|(_, heat )| *heat)
+                        .map(|(province_e, _)| *province_e) 
+                    else {
+                        return;
+                    };
+
+                    context
+                        .army_heatmap
+                        .entry(target_province)
+                        .and_modify(|heat| *heat += 1)
+                        .or_insert(1);
+
+                    commands.trigger(ArmyMoved { army: army_e, province: target_province });
+                });
+        });
+
+}
+
+fn ai_create_armies(
+    event: On<AICreateArmies>,
+    mut contexts: ResMut<AIContexts>,
+    q_empires: Query<&Empire>,
+    mut s_provinces: ParamSet<(
+        Query<(Entity, &Province, &ControlledBy)>,
+        Query<&Province>,
+        Query<(&Province, Option<&ControlledBy>)>,
+    )>,
+    mut commands: Commands
+) {
+    let Ok(ai_empire) = q_empires.get(event.empire) else {
         error!("{}:{} :((", file!(), line!());
         return;
     };
@@ -166,16 +202,82 @@ fn ai_create_army(
     if context.castles == 0 {
         return;
     }
-    if ai_empire.get_soldiers() >= ai_empire.max_soldiers {
-        return;
-    }
     if !ai_empire.has_free_pops() {
         return;
     }
-    let cost = SoldierType::Infantry.recruit_cost();
-    if !ai_empire.can_afford(&cost) {
+    let recruit_cost = SoldierType::Infantry.recruit_cost();
+    if !ai_empire.can_afford(&recruit_cost) {
         return;
     }
+
+    let q_owned = &s_provinces.p0();
+    let ai_castle_provinces =  q_owned
+        .iter()
+        .filter_map(|(province_e, province_c, owner)| {
+            if owner.entity() == event.empire && 
+               province_c.has_castle()
+            {
+                Some(province_e)
+            }
+            else {
+                None
+            }
+        })
+        .collect::<Vec<Entity>>();
+    
+    let q_provinces = &mut s_provinces.p1();
+    let recruited = ai_castle_provinces
+        .iter()
+        .any(|province_e| {
+            let Ok(province_c) = q_provinces.get(*province_e) else {
+                error!("{}:{} :(", file!(), line!());
+                return false;
+            };
+            if province_c.pops_extra_room() == 0  {
+                return false;
+            }
+
+            let upkeep_cost = province_c.soldier_upkeep();
+            if ai_empire.has_free_pops() &&
+               ai_empire.can_afford(&recruit_cost) &&
+               ai_empire.has_income_for(&upkeep_cost) {
+                /* Recruiting soldiers and making armies is implemented as events, meaning that we cannot easily do it in batches. 
+                 * Hacky solition: schedule the same AIArmiesCreated from here and return early. Wasting cpu time, but whatever.
+                 * This opaque type of buffered recursion fits very badly with iterator code, I wrote a bug here initially.
+                 * Whatever. */
+                
+                commands.trigger(SoldierRecruited { soldier: SoldierType::Infantry, empire: event.empire, province: *province_e });
+                commands.trigger(AICreateArmies { empire: event.empire });
+                true
+            }
+            else {
+                false
+            }
+        });
+    
+    if recruited {
+        return;
+    }
+    
+    /* If we got to this point, it means that no more soldiers could be recruited. We can try to assign armies */
+    ai_castle_provinces
+        .iter()
+        .for_each(|province_e| {
+            let Ok(province_c) = q_provinces.get(*province_e) else {
+                error!("{}:{} :(", file!(), line!());
+                return;
+            };
+            let soldiers = province_c.soldier_count();
+            if soldiers == 0 {
+                return;
+            }
+            (0..soldiers)
+                .for_each(|_| {
+                    commands.trigger(ArmyCreated { empire: event.empire, province: *province_e });
+                });
+        });
+    
+
 }
 
 fn ai_claim_random_provinces(
@@ -311,9 +413,7 @@ fn ai_claim_random_provinces(
     let Some(empty_province) = empty_province else {
         return;
     };
-
     ai_empire.remove_resources(&House::build_cost());
-    ai_empire.try_remove_free_pop();
     context.provinces += 1;
     commands.trigger(ProvinceClaimed { empire: event.empire, province: empty_province });
 }
@@ -342,7 +442,7 @@ fn ai_claim_provinces(
     if !ai_empire.can_afford(&cost) {
         return;
     }
-    let grain_shortage = ai_empire.get_income(&ResourceType::Grain) < 5.0;
+    let grain_shortage = ai_empire.get_income(&ResourceType::Grain) < 5.0 + (turns.full_rounds() / 10) as f32;
 
     if !grain_shortage && let Some(next_hex) = context.path_to_gold.get(context.path_claimed as usize) {
         let Some(province_e) = grid.get_entity(next_hex) else {
@@ -396,7 +496,7 @@ fn ai_construct_buildings(
             if province_c.can_build_special_building() {
                 let ok_to_build_castle = 
                     context.castles < context.gold_mines && context.gold_mines > 0 &&
-                    context.farms > std::cmp::max(3 * context.castles, 4) &&
+                    context.farms > std::cmp::max(2 * context.castles, 4) &&
                     matches!(province_c.ptype, ProvinceType::BlackSoil | ProvinceType::Plains | ProvinceType::Woods);
                 let castle_cost = SpecialBuilding::Castle.build_cost();
                 let random_factor = rand::random_range(0..=1) == 1;
@@ -427,7 +527,7 @@ fn ai_construct_buildings(
                         },
                         SpecialBuilding::GoldMine => {
                             let ok_to_build = 
-                                context.lumber_mills > 2 * context.gold_mines &&
+                                context.lumber_mills > context.gold_mines &&
                                 context.farms > 3 * context.gold_mines &&
                                 context.stone_mines as f32 > 1.5 * context.gold_mines as f32;
                             if !ok_to_build {
@@ -437,7 +537,7 @@ fn ai_construct_buildings(
                         },
                         SpecialBuilding::StoneMine => {
                             let ok_to_build = 
-                                context.lumber_mills > 2 * context.stone_mines &&
+                                context.lumber_mills > context.stone_mines &&
                                 context.farms as f32 > 2.5 * context.stone_mines as f32;
                             if !ok_to_build {
                                 return;
@@ -452,9 +552,11 @@ fn ai_construct_buildings(
                     commands.trigger(SpecialBuildingAdded { province: province_e, castle: false });
                 }
             }
-            else if province_c.get_pops() == province_c.get_max_pops() - 1 &&
-                 province_c.get_houses() < MAX_HOUSES &&
-                 context.lumber_mills >= 1 && context.farms >= 1 {
+            else if 
+                (province_c.get_pops() == province_c.get_max_pops() - 1 || province_c.has_castle()) &&
+                province_c.get_houses() < MAX_HOUSES &&
+                context.lumber_mills >= 1 && context.farms >= 1 
+            {
                 let cost = House::build_cost();
                 if ai_empire.can_afford(&cost) {
                     ai_empire.remove_resources(&cost);
@@ -484,7 +586,7 @@ fn ai_assign_pops(
         error!("{}:{} :((", file!(), line!());
         return;
     };
-    info!("[{}]: {}", ai_empire.id, resource_string(&ai_empire.resource_total));
+    info!("[{}]: {}", ai_empire.id, resource_string(&ai_empire.total_income()));
 
     if ai_empire.get_free_pops() == 0 {
         return;
@@ -543,8 +645,7 @@ fn setup_ai_context(
     empires: Res<Empires>,
     grid: Res<HexGrid>,
     q_owned: Query<(&Province, &ControlledBy)>,
-    q_provinces: Query<(&Province, Option<&ControlledBy>)>,
-    mut commands: Commands
+    q_provinces: Query<(&Province, Option<&ControlledBy>)>
 ) {
     let Some(context) = contexts.map.get_mut(&event.empire_id) else {
         error!("{}:{} bad error :((", file!(), line!());
@@ -647,7 +748,7 @@ fn play_ai_turn(
     empires: Res<Empires>,
     mut commands: Commands
 ) {
-    let Some(Some(context)) = contexts.map.get_mut(&event.empire_id) else {
+    let Some(Some(_)) = contexts.map.get_mut(&event.empire_id) else {
         error!("{}:{} bad error :((", file!(), line!());
         return;
     };
@@ -660,6 +761,7 @@ fn play_ai_turn(
     commands.trigger(AIConstructBuildings { empire: *empire_e });
     commands.trigger(AIClaimProvinces { empire: *empire_e });
     commands.trigger(AICreateArmies { empire: *empire_e });
+    commands.trigger(AIMoveArmies { empire: *empire_e });
 }
 
 
@@ -677,7 +779,8 @@ impl Plugin for EmpireAIPlugin {
             .add_observer(ai_construct_buildings)
             .add_observer(ai_claim_provinces)
             .add_observer(ai_claim_random_provinces)
-            .add_observer(ai_create_army)
+            .add_observer(ai_create_armies)
+            .add_observer(ai_move_armies)
             .add_observer(setup_ai_context);
     }
 }
