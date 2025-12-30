@@ -226,7 +226,7 @@ pub fn update_build_castle_button(
         return;
     };
     
-    let PickedProvince::Selected(prov) = *pick else {
+    let PickedProvince::Selected(_) = *pick else {
         return;
     };
     let build_cost = SpecialBuilding::Castle.build_cost();
@@ -277,9 +277,7 @@ pub fn update_recruit_button(
     button_ent: Single<Entity, With<RecruitSoldierButton>>,
     mut text_query: Query<&mut Text>,
     pick: Res<PickedProvince>,
-    q_provinces: Query<&Province>,
     empires: Res<Empires>,
-    mut q_empires: Query<&mut Empire>,
     mut commands: Commands,
 ) {
     let (pressed, hovered, disabled, color, children) = &mut *button;
@@ -287,7 +285,7 @@ pub fn update_recruit_button(
         return;
     };
     
-    let PickedProvince::Selected(prov) = *pick else {
+    let PickedProvince::Selected(_) = *pick else {
         return;
     };
     let recruit_cost = SoldierType::Infantry.recruit_cost();
@@ -300,16 +298,8 @@ pub fn update_recruit_button(
             error!("Missing selected province!");
             return;
         };
-        let Ok(province_c) = q_provinces.get(province) else {
-            error!("Missing province component");
-            return;
-        };
         let Some(player_empire) = empires.player_empire() else {
             error!("Missing player empire");
-            return;
-        };
-        let Ok(mut empire_c) = q_empires.get_mut(*player_empire) else {
-            error!("Player empire component missing");
             return;
         };
 

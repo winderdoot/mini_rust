@@ -1,5 +1,3 @@
-use std::f32::consts::E;
-
 use bevy::prelude::*;
 
 use crate::{game_logic::empire::*, game_systems::{GameSystems, StartupSystems}, ai::core::*};
@@ -90,14 +88,14 @@ fn turn_started(
     event: On<NewTurn>,
     mut turns: ResMut<Turns>,
     empires: Res<Empires>,
-    mut q_empires: Query<&mut Empire>,
+    q_empires: Query<&Empire>,
     mut commands: Commands
 ) {
     let Some(empire_ent) = empires.get_entity(event.empire_id) else {
         error!("Missing empire entity");
         return;
     };
-    let Ok(mut empire_c) = q_empires.get_mut(*empire_ent) else {
+    let Ok(empire_c) = q_empires.get(*empire_ent) else {
         error!("Missing empire component");
         return;
     };

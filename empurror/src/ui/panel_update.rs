@@ -128,7 +128,7 @@ pub fn update_claims_panel(
     )>,
     mut commands: Commands,
     grid: Res<HexGrid>,
-    turns: Res<Turns>
+    _turns: Res<Turns>
 ) {
     let province_e = event.province;
     let Ok((province_c, controlled_by, armies_c)) = q_provinces.get(province_e) else {
@@ -238,7 +238,7 @@ fn update_detailed_province_panel(
         Single<Entity, With<BuildResourceBuildingButton>>,
     )>,
     commands: &mut Commands,
-    turns: &Res<Turns>
+    _turns: &Res<Turns>
 ) {
     let income = prov.get_income();
     let income_text = &mut *text.p3();
@@ -308,7 +308,7 @@ pub fn assign_residents_interaction(
     mut q_provinces: Query<&mut Province>,
     empires: Res<Empires>,
     mut commands: Commands,
-    turns: Res<Turns>
+    _turns: Res<Turns>
 ) {
     if panel_node.display != Display::Flex {
         return;
@@ -352,12 +352,12 @@ pub fn assign_residents_interaction(
 pub fn update_province_panel_group(
     picked: Res<PickedProvince>,
     q_provinces: Query<(&Province, Option<&ControlledBy>, Option<&ProvinceBuildings>)>,
-    q_prov_trans: Query<&Transform, With<Province>>,
-    q_prov_owner: Query<&ControlledBy, With<Province>>,
+    // q_prov_trans: Query<&Transform, With<Province>>,
+    // q_prov_owner: Query<&ControlledBy, With<Province>>,
     q_houses: Query<Option<&House>>,
     q_empire: Query<(&Empire, &Controls)>,
     empire_assets: Res<EmpireAssets>,
-    empires: Res<Empires>,
+    // empires: Res<Empires>,
     mut nodes: ParamSet<(
         Single<&mut Node, With<UIProvincePanel>>,
         Single<&mut Node, With<UIBasicProvincePanel>>,
@@ -383,7 +383,6 @@ pub fn update_province_panel_group(
         Single<Entity, With<BuildResourceBuildingButton>>,
     )>,
     mut commands: Commands,
-    grid: Res<HexGrid>,
     turns: Res<Turns>
 ) {
     match *picked {
@@ -436,7 +435,7 @@ pub fn update_recruit_panel(
         Single<Entity, With<BuildCastleButton>>,
     )>,
     mut commands: Commands,
-    turns: Res<Turns>
+    _turns: Res<Turns>
 ) {
     let castle_button = &mut *nodes.p1();
     castle_button.display = Display::None;
@@ -558,8 +557,8 @@ pub fn update_armies_panel(
     picked: Res<PickedProvince>,
     mut q_provinces: Query<(&mut Province, Option<&ControlledBy>, Option<&mut ProvinceArmies>)>,
     mut q_armies: Query<&mut Army>,
-    mut q_empires: Query<&mut Empire>,
-    empires: Res<Empires>,
+    q_empires: Query<&Empire>,
+    // empires: Res<Empires>,
     mut nodes: ParamSet<(
         Single<(&mut Node, &mut ArmiesPanel)>,
     )>,
@@ -574,7 +573,7 @@ pub fn update_armies_panel(
         Single<Entity, With<DisbandArmyButton>>,
     )>,
     mut commands: Commands,
-    turns: Res<Turns>
+    _turns: Res<Turns>
 ) {
     let (tpl_node, _) = &mut *nodes.p0();
     tpl_node.display = Display::None;
@@ -623,14 +622,14 @@ pub fn update_armies_panel(
         return;
     }
     
-    let Some(player_empire_e) = empires.get_entity(PLAYER_EMPIRE) else {
-        error!("{}:{} Missing player empire enitty", file!(), line!());
-        return;
-    };
-    let Ok(mut player_empire_c) = q_empires.get_mut(*player_empire_e) else {
-        error!("{}:{} Missing player empire component", file!(), line!());
-        return;
-    };
+    // let Some(player_empire_e) = empires.get_entity(PLAYER_EMPIRE) else {
+    //     error!("{}:{} Missing player empire enitty", file!(), line!());
+    //     return;
+    // };
+    // let Ok(mut player_empire_c) = q_empires.get_mut(*player_empire_e) else {
+    //     error!("{}:{} Missing player empire component", file!(), line!());
+    //     return;
+    // };
     
     /* Display the panel */
     tpl_node.display = Display::Flex;
@@ -783,7 +782,6 @@ pub fn update_diplomacy_panel(
     mut s_text: ParamSet<(
         Single<&mut Text, With<DiplomacyText>>,
     )>,
-    mut commands: Commands
 ) {
     let node = &mut *s_nodes.p0();
     let enabled = node.display == Display::Flex;

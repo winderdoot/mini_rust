@@ -489,7 +489,7 @@ fn ai_construct_buildings(
     
     q_provinces
         .iter_mut()
-        .for_each(|(province_e, mut province_c, controlled_by)| {
+        .for_each(|(province_e, province_c, controlled_by)| {
             if controlled_by.entity() != event.empire {
                 return;
             }

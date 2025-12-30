@@ -15,7 +15,7 @@ use crate::scene::assets::{EmpireAssets, Icons};
 
 const TPL_PADDING: Val = Val::Px(20.0);
 const PANEL_COLOR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 1.0);
-const PANEL_COLOR_TR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 0.5);
+// const PANEL_COLOR_TR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 0.5);
 pub const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
 pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
 pub const BUTTON_COLOR_PRESS: Color = Color::linear_rgba(0.4, 0.4, 0.4, 1.0);
