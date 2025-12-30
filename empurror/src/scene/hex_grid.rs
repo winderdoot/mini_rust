@@ -33,24 +33,24 @@ pub struct HexGridSettings {
 }
 
 impl HexGridSettings {
-    pub fn terrain_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
-        self.materials.get(province).unwrap().clone()
+    pub fn terrain_material(&self, province: &ProvinceType) -> Option<Handle<StandardMaterial>> {
+        self.materials.get(province).cloned()
     }
 
-    pub fn hover_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
-        self.hover_materials.get(province).unwrap().clone()
+    pub fn hover_material(&self, province: &ProvinceType) -> Option<Handle<StandardMaterial>> {
+        self.hover_materials.get(province).cloned()
     }
 
-    pub fn empire_material(&self, province: &ProvinceType, empire_id: u32) -> Handle<StandardMaterial> {
-        self.empire_materials.get(&(province.clone(), empire_id)).unwrap().clone()
+    pub fn empire_material(&self, province: &ProvinceType, empire_id: u32) -> Option<Handle<StandardMaterial>> {
+        self.empire_materials.get(&(province.clone(), empire_id)).cloned()
     }
 
-    pub fn select_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
-        self.select_materials.get(province).unwrap().clone()
+    pub fn select_material(&self, province: &ProvinceType) -> Option<Handle<StandardMaterial>> {
+        self.select_materials.get(province).cloned()
     }
 
-    pub fn reachable_material(&self, province: &ProvinceType) -> Handle<StandardMaterial> {
-        self.reachable_materials.get(province).unwrap().clone()
+    pub fn reachable_material(&self, province: &ProvinceType) -> Option<Handle<StandardMaterial>> {
+        self.reachable_materials.get(province).cloned()
     }
 }
 
@@ -130,14 +130,17 @@ fn create_empire_materials(
         .flat_map(|(p, h)| {
             empires
                 .iter()
-                .map(|e| {
-                    let mat = materials.get(h).unwrap();
+                .flat_map(|e| {
+                    let Some(mat) = materials.get(h) else {
+                        error!("{}:{} missing material", file!(), line!());
+                        return None;
+                    };
                     let mut new_mat = mat.clone();
                     new_mat.emissive = LinearRgba::from(e.color);
                     // TODO: Add clearcoat to water material
                     let new_handle = materials.add(new_mat);
 
-                    ((p.clone(), e.id), new_handle)
+                    Some(((p.clone(), e.id), new_handle))
                 })
                 .collect::<HashMap<(ProvinceType, u32), Handle<StandardMaterial>>>()
             }
@@ -173,33 +176,14 @@ pub struct HexGrid {
 }
 
 impl HexGrid {
-    pub fn get_random_tile(&self) -> (&Hex, &Entity) {
+    pub fn get_random_tile(&self) -> Option<(&Hex, &Entity)> {
         let index = rand::rng().random_range(0..self.entities.len());
-        self.entities.get_index(index).unwrap()
+        self.entities.get_index(index)
     }
 
     pub fn get_entity(&self, hex: &Hex) -> Option<&Entity> {
         self.entities.get(hex)
     }
-}
-
-#[allow(dead_code)]
-fn compute_hex_mesh(hex_layout: &HexLayout) -> Mesh {
-    let mesh_info = PlaneMeshBuilder::new(hex_layout)
-        .facing(Vec3::Y)
-        .with_scale(Vec3::splat(1.0))
-        .build();
-
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, mesh_info.vertices)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_info.normals.clone())
-    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, mesh_info.uvs)
-    .with_inserted_indices(Indices::U16(mesh_info.indices))
-    .with_generated_tangents()
-    .unwrap()
 }
 
 fn compute_hex_prism_mesh(hex_size: f32, height: f32) -> Mesh {
@@ -217,7 +201,7 @@ pub fn setup_hexgrid(
 
     let hex_tile_mesh = compute_hex_prism_mesh(HEX_SIZE, PRISM_HEIGHT);
     let mesh_handle = meshes.add(hex_tile_mesh);
-    let seed : u32= SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u32;
+    let seed : u32= SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::from_secs(0)).as_millis() as u32;
     let generator = ProvinceGenerator::new(seed, MIN_HEIGHT, MAX_HEIGHT);
 
     let tiles = generator.generate(
@@ -231,8 +215,11 @@ pub fn setup_hexgrid(
 
     let tile_entities: IndexMap<Hex, Entity> = tiles
         .into_iter()
-        .map(|(hex, mut pos, province)| {
-            let mat = settings.terrain_material(&province);
+        .flat_map(|(hex, mut pos, province)| {
+            let Some(mat) = settings.terrain_material(&province) else {
+                error!("{}:{} missing materia", file!(), line!());
+                return None;
+            };
 
             /* The prism mesh is extruded along the z axis, we have to translate it and rotate it properly */
             pos.y -= PRISM_HEIGHT * 0.5;
@@ -251,7 +238,7 @@ pub fn setup_hexgrid(
             leave_observer.watch_entity(id);
             select_observer.watch_entity(id);
 
-            (hex, id)
+            Some((hex, id))
         })
         .collect();
 

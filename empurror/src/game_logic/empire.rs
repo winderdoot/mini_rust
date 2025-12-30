@@ -492,8 +492,14 @@ fn assign_provinces(
     for (_id, empire) in empires.empire_entity.iter() {
         
         loop {
-            let (hex, tile) = grid.get_random_tile();
-            let prov = provinces.get(*tile).unwrap();
+            let Some((hex, tile)) = grid.get_random_tile() else {
+                error!("{}:{} this should never occur", file!(), line!());
+                return;
+            };
+            let Ok(prov) = provinces.get(*tile) else {
+                error!("{}:{} missing province entity", file!(), line!());
+                return;
+            };
 
             if assigned.contains(tile) {
                 continue;
@@ -524,7 +530,10 @@ fn assign_provinces(
             let Some(plains_hex) = plains_neighbor else {
                 continue;
             };
-            let plains_ent = grid.get_entity(&plains_hex).unwrap();
+            let Some(plains_ent) = grid.get_entity(&plains_hex) else {
+                error!("{}:{} missing grid entity", file!(), line!());
+                return;
+            };
             let woods_ent = tile;
             /* We have 2 starting provinces we can use */
             assigned.insert(woods_ent);

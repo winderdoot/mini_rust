@@ -52,7 +52,7 @@ impl ProvinceGenerator {
 
     /// Calculates province type and province altitude
     pub fn get_province(&self, p: &Vec2) -> (ProvinceType, f32) {
-        let h = self.get_height(&p);
+        let h = self.get_height(p);
         
         if h < self.water_level {
             return (ProvinceType::Water, self.water_level - 0.05f32)
@@ -61,7 +61,7 @@ impl ProvinceGenerator {
             return (ProvinceType::Mountains, h)
         }
         
-        let humid = self.get_humidity(&p);
+        let humid = self.get_humidity(p);
 
         if h < self.hill_level {
             match humid {
@@ -71,7 +71,7 @@ impl ProvinceGenerator {
             }
         }
 
-        return (ProvinceType::Hills, h)
+        (ProvinceType::Hills, h)
     }
 
     pub fn get_height(&self, p: &Vec2) -> f32 {
@@ -95,9 +95,7 @@ impl ProvinceGenerator {
             })
             .iter()
             .fold((0.0, 0.0), |(sum, sum_w), (s, w)| (sum + s, sum_w + w));
-        let sample = sum / w;
-        
-        sample
+        sum / w
     }
 
     fn count_water_neighbors(&self, hex: &Hex, layout: &HexLayout) -> f32 {

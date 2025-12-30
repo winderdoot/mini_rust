@@ -315,13 +315,9 @@ fn ai_claim_random_provinces(
             .all_neighbors()
             .iter()
             .find_map(|hex| {
-                let Some(province_e) = grid.get_entity(hex) else {
-                    return None;
-                };
-                let Ok((province_c, control)) = q_provinces.get(*province_e) else {
-                    return None;
-                };
-                if let Some(_) = control {
+                let province_e = grid.get_entity(hex)?;
+                let (province_c, control) = q_provinces.get(*province_e).ok()?;
+                if control.is_some() {
                     return None;
                 }
                 if let ProvinceType::Desert = province_c.ptype {
@@ -357,7 +353,6 @@ fn ai_claim_random_provinces(
             .collect::<Vec<Entity>>();
 
         let mut attempts = 150;
-        let found =
         loop {
             let ind = rand::random_range(0..ai_provinces.len());
             let Ok((province_c, _)) = q_provinces.get(ai_provinces[ind]) else {
@@ -369,13 +364,9 @@ fn ai_claim_random_provinces(
                 .all_neighbors()
                 .iter()
                 .find_map(|hex| {
-                    let Some(province_e) = grid.get_entity(hex) else {
-                        return None;
-                    };
-                    let Ok((province_c, control)) = q_provinces.get(*province_e) else {
-                        return None;
-                    };
-                    if let Some(_) = control {
+                    let province_e = grid.get_entity(hex)?;
+                    let (province_c, control) = q_provinces.get(*province_e).ok()?;
+                    if control.is_some() {
                         return None;
                     }
                     if let ProvinceType::Desert = province_c.ptype {
@@ -405,9 +396,7 @@ fn ai_claim_random_provinces(
             else {
                 break None;
             }
-        };
-
-        found            
+        }        
     };
 
     let Some(empty_province) = empty_province else {
@@ -574,7 +563,7 @@ fn order_provinces(a: &Province, b: &Province) -> Ordering {
         let room_b = b.pops_extra_room();
         return room_a.cmp(&room_b).reverse();
     }
-    return a.ptype.order_id().cmp(&b.ptype.order_id());
+    a.ptype.order_id().cmp(&b.ptype.order_id())
 }
 
 fn ai_assign_pops(
@@ -586,7 +575,7 @@ fn ai_assign_pops(
         error!("{}:{} :((", file!(), line!());
         return;
     };
-    info!("[{}]: {}", ai_empire.id, resource_string(&ai_empire.total_income()));
+    info!("[{}]: {}", ai_empire.id, resource_string(ai_empire.total_income()));
 
     if ai_empire.get_free_pops() == 0 {
         return;
@@ -670,12 +659,8 @@ fn setup_ai_context(
         };
     
     let cost = |_, b: Hex| {
-        let Some(a_b) = grid.get_entity(&b) else {
-            return None;
-        };
-        let Ok((pb_c, cb_c)) = q_provinces.get(*a_b) else {
-            return None;
-        };
+        let a_b = grid.get_entity(&b)?;
+        let (pb_c, cb_c) = q_provinces.get(*a_b).ok()?;
         if let ProvinceType::Water = pb_c.ptype {
             return None;
         }
@@ -692,10 +677,7 @@ fn setup_ai_context(
             let ProvinceType::Mountains = province_c.ptype else {
                 return None;
             };
-            let path = hexx::algorithms::a_star(start_hex, province_c.hex(), cost);
-            let Some(path) = path else {
-                return None;
-            };
+            let path = hexx::algorithms::a_star(start_hex, province_c.hex(), cost)?;
            
             Some((province_c.hex(), path.len()))
         })
@@ -711,25 +693,18 @@ fn setup_ai_context(
     };
 
     let claimed = 0;
-    path = path
-        .into_iter()
-        .filter_map(|hex| {
-            let Some(province_e) = grid.get_entity(&hex) else {
+    path
+        .retain(|hex| {
+            let Some(province_e) = grid.get_entity(hex) else {
                 error!("{}:{}", file!(), line!());
-                return None;
+                return false;
             };
             let Ok((_, controlled_by)) = q_provinces.get(*province_e) else {
                 error!("{}:{}", file!(), line!());
-                return None;
+                return false;
             };
-            if let None = controlled_by {
-                Some(hex)
-            }
-            else {
-                None
-            }
-        })
-        .collect();
+            controlled_by.is_none()
+        });
 
     *context = Some(
         AIContext {

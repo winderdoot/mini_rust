@@ -34,7 +34,7 @@ impl Soldier {
     pub fn new_infantry(province: &Entity) -> Self {
         Self {
             stype: SoldierType::Infantry,
-            home_province: province.clone()
+            home_province: *province
         }
     }
 }
@@ -67,7 +67,7 @@ impl Army {
     }
 
     pub fn empire(&self) -> Entity {
-        self.empire.clone()
+        self.empire
     }
 
     pub fn march_budget(&self) -> u32 {
@@ -75,11 +75,11 @@ impl Army {
             return self.atype.march_budget();
         }
 
-        return self.atype.march_budget() / 2;
+        self.atype.march_budget() / 2
     }
 
     pub fn soldier_type(&self) -> SoldierType {
-        self.atype.clone()
+        self.atype
     }
 
     pub fn try_add_soldier(&mut self, soldier: Soldier) -> bool {
@@ -219,9 +219,7 @@ pub fn move_army(
         if let Some(stationed_armies_c) = prov_armies_c {
             let stationed_armies = stationed_armies_c
                 .armies()
-                .iter()
-                .cloned()
-                .collect::<Vec<Entity>>();
+                .to_vec();
 
             /* There are stationed armies to defend the province */
             let defeated_armies = stationed_armies
@@ -230,7 +228,7 @@ pub fn move_army(
                     if attack_count == 0 {
                         return None;
                     }
-                    let Ok((mut defending_army, army_prov)) = q_armies.get_mut(army_e.clone()) else {
+                    let Ok((mut defending_army, army_prov)) = q_armies.get_mut(*army_e) else {
                         error!("{}:{} Missing army component", file!(), line!());
                         return None;
                     };
@@ -259,7 +257,7 @@ pub fn move_army(
                         });
 
                     if defending_army.soldier_count() == 0 {
-                        return Some(*army_e)
+                        Some(*army_e)
                     }
                     else {
                         None
@@ -354,12 +352,8 @@ pub fn get_reachable_tiles(
 
     let budget = army_c.march_budget();
     let const_func = |hex: Hex| {
-        let Some(province_e) = grid.get_entity(&hex) else {
-            return None;
-        };
-        let Ok((province_c, controlled_by)) = q_provinces.get(*province_e) else {
-            return None;
-        };
+        let province_e = grid.get_entity(&hex)?;
+        let (province_c, controlled_by) = q_provinces.get(*province_e).ok()?;
         if let Some(owner) = controlled_by &&
            let Ok(owner_c) = q_empires.get(owner.entity()) && 
            let Ok(army_empire_c) = q_empires.get(army_c.empire()) {
@@ -370,14 +364,14 @@ pub fn get_reachable_tiles(
             }
         }
 
-        return province_c.march_cost();
+        province_c.march_cost()
     };
 
     let hex_set = hexx::algorithms::field_of_movement(province_c.hex(), budget, const_func);
 
-    return hex_set
+    hex_set
         .into_iter()
         .filter_map(|hex| grid.get_entity(&hex))
         .cloned()
-        .collect();
+        .collect()
 }

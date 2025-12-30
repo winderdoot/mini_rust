@@ -32,7 +32,7 @@ pub fn resource_string(map: &HashMap<ResourceType, f32>) -> String {
 pub fn add_resources(a: &HashMap<ResourceType, f32>, b: &HashMap<ResourceType, f32>) -> HashMap<ResourceType, f32> {
     ResourceType::iter()
         .map(|k| {
-            let total = resource_amount(&a, &k) + resource_amount(&b, &k);
+            let total = resource_amount(a, &k) + resource_amount(b, &k);
 
             (k, total)
         })

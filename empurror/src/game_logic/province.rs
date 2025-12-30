@@ -220,11 +220,8 @@ impl Province {
         if self.special_building || self.castle {
             false
         }
-        else if let ProvinceType::Desert | ProvinceType::Water = self.ptype {
-            false
-        }
         else {
-            true
+            !matches!(self.ptype, ProvinceType::Desert | ProvinceType::Water)
         }
     }
 
@@ -307,19 +304,19 @@ impl Province {
 
         match self.ptype {
             ProvinceType::BlackSoil => {
-                return [(ResourceType::Grain, self.pops as f32 * 2.25)].into();
+                [(ResourceType::Grain, self.pops as f32 * 2.25)].into()
             },
             ProvinceType::Plains => {
-                return [(ResourceType::Grain, self.pops as f32 * 1.5)].into();
+                [(ResourceType::Grain, self.pops as f32 * 1.5)].into()
             },
             ProvinceType::Woods => {
-                return [(ResourceType::Lumber, self.pops as f32 * 1.5)].into();
+                [(ResourceType::Lumber, self.pops as f32 * 1.5)].into()
             },
             ProvinceType::Hills => {
-                return [(ResourceType::Stone, self.pops as f32 * 1.0)].into();
+                [(ResourceType::Stone, self.pops as f32 * 1.0)].into()
             },
             ProvinceType::Mountains => {
-                return [(ResourceType::Gold, self.pops as f32 * 1.0)].into();
+                [(ResourceType::Gold, self.pops as f32 * 1.0)].into()
             },
             _ => Default::default()
         }
@@ -383,26 +380,25 @@ pub enum SpecialBuilding {
 
 impl SpecialBuilding {
     pub fn income(&self, ptype: &ProvinceType, workers: u32) -> HashMap<ResourceType, f32> {
-        match self {
-            SpecialBuilding::Castle => return Default::default(),
-            _ => {}
+        if let SpecialBuilding::Castle = self {
+            return Default::default()
         }
 
         match ptype {
             ProvinceType::BlackSoil => {
-                return [(ResourceType::Grain, workers as f32 * 6.0)].into();
+                [(ResourceType::Grain, workers as f32 * 6.0)].into()
             },
             ProvinceType::Plains => {
-                return [(ResourceType::Grain, workers as f32 * 3.0)].into();
+                [(ResourceType::Grain, workers as f32 * 3.0)].into()
             },
             ProvinceType::Woods => {
-                return [(ResourceType::Lumber, workers as f32 * 4.0)].into();
+                [(ResourceType::Lumber, workers as f32 * 4.0)].into()
             },
             ProvinceType::Hills => {
-                return [(ResourceType::Stone, workers as f32 * 3.0)].into();
+                [(ResourceType::Stone, workers as f32 * 3.0)].into()
             },
             ProvinceType::Mountains => {
-                return [(ResourceType::Gold, workers as f32 * 3.0)].into();
+                [(ResourceType::Gold, workers as f32 * 3.0)].into()
             },
             _ => Default::default()
         }
@@ -689,7 +685,7 @@ pub fn add_house(
 
     let transl = dir.clamp_length_max(0.65) + Vec3::new(0.0, 0.5, 0.0);
     let desired = Transform::from_translation(transl).with_rotation(Quat::from_rotation_y(rot_ang));
-    let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
+    let transform = hex_grid::hextile_rel_transform(prov_transform, &desired);
 
     commands.spawn((
         House { max_residents: 5 },
@@ -726,7 +722,7 @@ pub fn add_special_building(
 
     let transl = Vec3::new(0.0, 0.5, 0.0);
     let desired = Transform::from_translation(transl);
-    let transform = hex_grid::hextile_rel_transform(&prov_transform, &desired);
+    let transform = hex_grid::hextile_rel_transform(prov_transform, &desired);
     
     let (model, building_type) = match (prov.ptype.clone(), event.castle) {
         (_, true) => {
