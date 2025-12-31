@@ -191,7 +191,6 @@ pub fn move_army(
         return;
     };
     let starting_prov = starting_province.entity();
-    info!("[{}] army {} moved to {}", army_c.empire(), event.army, event.province);
     
     /* Check if this tile has armies we should fight first */
 

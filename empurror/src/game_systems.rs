@@ -1,7 +1,7 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_ecs::system::SystemId;
 
-use crate::{game_logic::empire::*, scene::mesh_highlight::*};
+use crate::{game_logic::{empire::*, game_states::AppState}, scene::mesh_highlight::*};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub enum StartupSystems {
@@ -18,7 +18,11 @@ pub enum StartupSystems {
 pub enum UpdateSystems {
     Camera,
     UIUpdate,
-    OnMessage
+}
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub enum MainMenuUpdate {
+    Interaction
 }
 
 /// Solves the problem of registering/running one shot sytems
@@ -59,19 +63,27 @@ impl Plugin for GameSystemsPlugin {
 
         app
             .insert_resource(game_systems)
-            .configure_sets(Startup, (
-                StartupSystems::LoadAssets,
-                StartupSystems::CreateEmpires,
-                StartupSystems::CreateHexGrid,
-                StartupSystems::AssignEmpireProvinces,
-                StartupSystems::InitTurns,
-                StartupSystems::CreateUI,
-                StartupSystems::CreateAI
-            ).chain())
-            .configure_sets(Update, (
-                UpdateSystems::Camera,
-                UpdateSystems::UIUpdate,
-                UpdateSystems::OnMessage
-            ));
+            .configure_sets(Startup, 
+                (
+                    StartupSystems::LoadAssets,
+                    StartupSystems::CreateEmpires,
+                    StartupSystems::CreateHexGrid,
+                    StartupSystems::AssignEmpireProvinces,
+                    StartupSystems::InitTurns,
+                    StartupSystems::CreateUI,
+                    StartupSystems::CreateAI
+                ).chain()
+            )
+            .configure_sets(Update, 
+                (
+                    UpdateSystems::Camera,
+                    UpdateSystems::UIUpdate,
+                ).run_if(in_state(AppState::InGame))
+            )
+            .configure_sets(Update, 
+                (
+                    MainMenuUpdate::Interaction,
+                ).run_if(in_state(AppState::MainMenu))
+            );
     }
 }

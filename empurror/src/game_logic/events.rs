@@ -20,6 +20,7 @@ impl Plugin for GameEventPlugin {
             .add_observer(move_army)
             .add_observer(reset_armies_moves)
             .add_observer(update_army_model)
+            .add_observer(bankrupt_empire)
             .add_observer(occupy_province);
     }
 }

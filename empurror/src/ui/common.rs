@@ -1,7 +1,7 @@
 use bevy::{prelude::*};
 use bevy_ui_widgets::UiWidgetsPlugins;
 
-use crate::{game_logic::game_states::*, scene::mesh_highlight::*, game_systems::*, ui::{panels::*, panel_update::*, button_update::*, views::*}};
+use crate::{game_logic::game_states::*, game_systems::*, scene::mesh_highlight::*, ui::{button_update::*, main_menu::*, panel_update::*, panels::*, views::*}};
 
 /* Init Plugin */
 pub struct GameUIPlugin;
@@ -16,7 +16,8 @@ impl Plugin for GameUIPlugin {
                     spawn_treasury_panel,
                     spawn_end_turn_button,
                     spawn_units_panel_group,
-                    spawn_diplomacy_panel
+                    spawn_diplomacy_panel,
+                    spawn_main_menu
                 )
                 .in_set(StartupSystems::CreateUI)
             )
@@ -41,6 +42,12 @@ impl Plugin for GameUIPlugin {
                 )
                 .in_set(UpdateSystems::UIUpdate)
             )
+            .add_systems(Update, 
+                (
+                    update_new_game_button
+                )
+                .in_set(MainMenuUpdate::Interaction)
+            )
             .add_systems(OnEnter(GridViewMode::Empire),
                 reset_province_materials
             )
@@ -53,6 +60,7 @@ impl Plugin for GameUIPlugin {
             .add_systems(OnExit(ArmyMovementView::On),
                 reset_province_materials
             )
+            .add_observer(start_new_game)
             .add_observer(update_claims_panel);
     }
 }

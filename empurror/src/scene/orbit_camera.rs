@@ -1,9 +1,13 @@
-use bevy::{input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*};
+use bevy::{camera::visibility::RenderLayers, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*};
 use std::f32::consts::{FRAC_PI_2};
 use std::ops::Range;
 use std::cmp::*;
 
 use crate::{game_logic::recently_moved::*, game_systems::UpdateSystems};
+
+/* Quick hack to add main menu/game render */
+pub const MENU_LAYER: usize = 1;
+pub const GAME_LAYER: usize = 0;
 
 #[derive(Resource)]
 pub struct CameraSettings {
@@ -113,6 +117,7 @@ pub fn camera_system(
 pub fn spawn_camera(mut commands: Commands, settings: Res<CameraSettings>) {
     commands.spawn((
         OrbitCamera::from_distance(settings.initial_distance),
+        RenderLayers::from_layers(&[MENU_LAYER]),
         Transform::from_xyz(2.0, settings.initial_distance, 0.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
         // DepthPrepass,

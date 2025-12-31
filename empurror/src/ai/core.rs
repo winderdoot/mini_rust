@@ -575,7 +575,7 @@ fn ai_assign_pops(
         error!("{}:{} :((", file!(), line!());
         return;
     };
-    info!("[{}]: {}", ai_empire.id, resource_string(ai_empire.total_income()));
+    // info!("[{}]: {}", ai_empire.id, resource_string(ai_empire.total_income()));
 
     if ai_empire.get_free_pops() == 0 {
         return;

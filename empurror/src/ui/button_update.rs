@@ -3,7 +3,7 @@ use bevy::{picking::hover::Hovered, prelude::*, ui::*};
 use std::cmp::{max};
 use crate::{game_logic::{armies::{ProvinceArmies, SoldierType}, empire::*, province::*, turns::EndTurn}, scene::hex_grid::*, ui::{panel_update::*, panels::*}};
 
-fn set_button_style(
+pub fn set_button_style(
     mess: &str,
     disabled_mess: &str,
     disabled: bool,

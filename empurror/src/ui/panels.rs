@@ -13,8 +13,8 @@ use bevy_ui_widgets::{Button};
 use crate::game_logic::resources::ResourceType;
 use crate::scene::assets::{EmpireAssets, Icons};
 
-const TPL_PADDING: Val = Val::Px(20.0);
-const PANEL_COLOR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 1.0);
+pub const TPL_PADDING: Val = Val::Px(20.0);
+pub const PANEL_COLOR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 1.0);
 // const PANEL_COLOR_TR: Color = Color::linear_rgba(0.1, 0.1, 0.1, 0.5);
 pub const BUTTON_COLOR: Color = Color::linear_rgba(0.2, 0.2, 0.2, 1.0);
 pub const BUTTON_COLOR_HOVER: Color = Color::linear_rgba(0.3, 0.3, 0.3, 1.0);
@@ -133,7 +133,7 @@ pub struct DiplomacyText;
 
 /* Systems */
 
-fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
+pub fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
     (
         Node {
             display: Display::None,
@@ -155,7 +155,7 @@ fn rounded_container(direction: FlexDirection, gap: Val) -> impl Bundle {
     )
 }
 
-fn button<T>(display: Display) -> impl Bundle
+pub fn button<T>(display: Display) -> impl Bundle
 where
     T: Component + Default 
 {
@@ -186,7 +186,7 @@ where
     )
 }
 
-fn text<T>(font_size: f32) -> impl Bundle
+pub fn text<T>(font_size: f32) -> impl Bundle
 where
     T: Component + Default 
 {
@@ -405,6 +405,7 @@ pub fn spawn_end_turn_button(
 ) {
     let button = (
         Node {
+            display: Display::None,
             border: UiRect::all(px(2)),
             padding: UiRect::all(px(5)),
             justify_content: JustifyContent::Center,
@@ -548,7 +549,9 @@ pub fn spawn_treasury_panel(
     };
 
     let main_panel = (
+        TreasuryPanel,
         Node {
+            display: Display::None,
             width: auto(),
             height: auto(),
             top: TPL_PADDING,

@@ -30,6 +30,10 @@ fn default_prov_material(
     else {
         settings.terrain_material(&province_c.ptype).clone()
     };
+    let Some(material) = material else {
+        error!("{}:{} missing material", file!(), line!());
+        return None;
+    };
 
     Some(material)
 }
@@ -55,7 +59,11 @@ pub fn cursor_enter_tile(
     let Ok((mut mat, ty)) = q_provinces.get_mut(event.entity) else {
         return;
     };
-    mat.0 = settings.hover_material(&ty.ptype);
+    let Some(material) = settings.hover_material(&ty.ptype) else {
+        error!("{}:{} missing material", file!(), line!());
+        return;
+    };
+    mat.0 = material;
     /* Just hope very hard that the event's come in order and the framerate is high */
     *picked = PickedProvince::Hovered(event.entity);
 }
@@ -150,7 +158,11 @@ pub fn cursor_select_tile(
     let Ok((mut material, ty, _)) = q_provinces.get_mut(event.entity) else {
         return;
     };
-    material.0 = settings.select_material(&ty.ptype);
+    let Some(mat) = settings.select_material(&ty.ptype) else {
+        error!("{}:{} ", file!(), line!());
+        return;
+    };
+    material.0 = mat;
     *picked = PickedProvince::Selected(event.entity);
 
 }
@@ -168,7 +180,7 @@ pub fn reset_province_materials(
     q_provinces
         .iter()
         .for_each(|(province_e, province_c, controlled_o)| {
-            let material =
+            let material_o =
             if let PickedProvince::Selected(selected) = *pick && selected == province_e {
                 settings.select_material(&province_c.ptype).clone()
             }
@@ -184,6 +196,10 @@ pub fn reset_province_materials(
             }
             else {
                 settings.terrain_material(&province_c.ptype).clone()
+            };
+            let Some(material) = material_o else {
+                error!("{}:{} missing material", file!(), line!());
+                return;
             };
 
             commands

@@ -1,6 +1,6 @@
 use bevy::{
-    asset::RenderAssetUsages, mesh::Indices, platform::collections::{HashMap, HashSet},
-    prelude::*, render::render_resource::PrimitiveTopology
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
 };
 
 use hexx::{shapes, *};

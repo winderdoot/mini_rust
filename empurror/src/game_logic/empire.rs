@@ -38,7 +38,10 @@ pub struct Empire {
     pub pops_income: u32,
 
     pub soldiers: u32,    /* Number of recruited soldiers */
-    pub max_soldiers: u32 /* Max soldier number, empire could recruit */
+    pub max_soldiers: u32, /* Max soldier number, empire could recruit */
+
+    /* Others */
+    pub is_playing: bool
 }
 
 pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> f32 {
@@ -46,6 +49,21 @@ pub fn resource_amount(map: &HashMap<ResourceType, f32>, typ: &ResourceType) -> 
 }
 
 impl Empire {
+    pub fn is_bankrupt(&self) -> bool {
+        ResourceType::iter()
+            .any(|t| {
+                self.get_total(&t) < 0.0
+            })
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.is_playing
+    }
+
+    pub fn loose(&mut self) {
+        self.is_playing = false;
+    }
+
     fn starting_resources() -> HashMap<ResourceType, f32> {
         [
             (ResourceType::Gold, 5.0), 
@@ -67,6 +85,7 @@ impl Empire {
             pops_income: 0,
             soldiers: 0,
             armies_created: 0,
+            is_playing: true,
             .. Default::default()
         }
     }
@@ -297,8 +316,68 @@ pub struct SoldierRecruited {
 pub struct ResetEmpireArmies {
     pub empire: Entity
 }
+#[derive(Event, Debug)]
+pub struct EmpireBankrupt {
+    pub empire: Entity
+}
 
 /* Systems */
+pub fn bankrupt_empire(
+    event: On<EmpireBankrupt>,
+    mut q_provinces: Query<&mut Province>,
+    mut q_empires: Query<(&mut Empire, Option<&Controls>)>,
+    q_armies: Query<(Entity, &Army, &ArmyProvince)>,
+    mut commands: Commands
+) {
+    let Ok((_, controls)) = q_empires.get_mut(event.empire) else {
+        error!("{}:{} Missing empire comonent", file!(), line!());
+        return;
+    };
+    let Some(controls) = controls else {
+        /* Nothing needs to be done */
+        return;
+    };
+    
+    let empire_armies = q_armies
+        .iter()
+        .filter(|(_, army_c, _)| {
+            army_c.empire() == event.empire
+        })
+        .map(|(army_e, _, army_province)| (army_e, army_province))
+        .collect::<Vec<_>>();
+
+    empire_armies
+        .iter()
+        .for_each(|(army_e, province_e)| {
+
+            commands
+                .entity(*army_e)
+                .despawn();
+
+            commands.trigger(ProvinceArmyChanged { province: province_e.entity() });
+            commands.trigger(ProvinceIncomeChanged { province: province_e.entity() });
+        });
+
+    controls.0
+        .iter()
+        .for_each(|province_e| {
+            let Ok(mut province_c) = q_provinces.get_mut(*province_e) else {
+                error!("{}:{} Missing province comonent", file!(), line!());
+                return;
+            };
+
+            province_c
+                .has_castle()
+                .then(|| province_c.remove_soliers());
+            
+            province_c.remove_pops();
+
+            commands
+                .entity(*province_e)
+                .remove::<ControlledBy>();
+        })
+}
+
 pub fn reset_armies_moves(
     event: On<ResetEmpireArmies>,
     mut q_armies: Query<&mut Army>

@@ -90,6 +90,10 @@ pub struct Province {
 }
 
 impl Province {
+    pub fn remove_pops(&mut self) {
+        self.pops = 0
+    }
+
     pub fn from_type(t: &ProvinceType, hex: &Hex) -> Self {
         Self {
             ptype: t.clone(),
@@ -142,6 +146,10 @@ impl Province {
 
     pub fn soldiers_iter(&self) -> impl Iterator<Item = &Soldier> {
         self.soldiers.iter()
+    }
+
+    pub fn remove_soliers(&mut self) {
+        self.soldiers.clear();
     }
 
     pub fn try_remove_soldier(&mut self) -> Option<Soldier> {
@@ -254,7 +262,12 @@ impl Province {
     }
 
     pub fn get_pops_income(&self) -> u32 {
-        min(1, self.max_pops - self.pops)
+        if self.has_castle() {
+            0
+        }
+        else {
+            min(1, self.max_pops - self.pops)
+        }
     }
 
     fn pop_cost(&self) -> f32 {

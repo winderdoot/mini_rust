@@ -73,8 +73,6 @@ fn turn_ended(
     };
     empire_c.apply_income();
 
-    // info!("Empire {} ends it's turn", event.empire_id);
-
     if event.empire_id == turns.empire_count - 1 {
         turns.completed_rounds += 1;
         empires.update_peace_time();
@@ -88,20 +86,40 @@ fn turn_started(
     event: On<NewTurn>,
     mut turns: ResMut<Turns>,
     empires: Res<Empires>,
-    q_empires: Query<&Empire>,
+    mut q_empires: Query<(Entity, &mut Empire, Option<&Controls>)>,
     mut commands: Commands
 ) {
     let Some(empire_ent) = empires.get_entity(event.empire_id) else {
         error!("Missing empire entity");
         return;
     };
-    let Ok(empire_c) = q_empires.get(*empire_ent) else {
+    let Ok((empire_e, mut empire_c, controls)) = q_empires.get_mut(*empire_ent) else {
         error!("Missing empire component");
         return;
     };
+    if controls.is_none_or(|controls| controls.is_empty()) {
+        /* Empire lost control of all provinces - game over for them */
+        empire_c.loose();
+    }
     
-    // info!("Empire {} starts it's turn", event.empire_id);
     turns.current_empire = event.empire_id;
+
+    if !empire_c.is_playing() {
+        commands.trigger(EndTurn { empire_id: event.empire_id });
+        return;
+    }
+    if empire_c.is_bankrupt() {
+        if empire_c.id == PLAYER_EMPIRE {
+            /* Game over screen */
+            todo!("game over screen");
+        }
+        else {
+            commands.trigger(EmpireBankrupt { empire: empire_e });
+            commands.trigger(EndTurn { empire_id: event.empire_id });
+        }
+        
+        return;
+    }    
 
     commands.trigger(ResetEmpireArmies { empire: *empire_ent });
     commands.trigger(ResourceIncomeChanged { empire: *empire_ent });
